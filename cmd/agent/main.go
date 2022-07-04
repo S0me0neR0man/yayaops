@@ -1,3 +1,7 @@
 package main
 
-func main() {}
+import "yayaops/client"
+
+func main() {
+	client.GetEngine().Start()
+}
