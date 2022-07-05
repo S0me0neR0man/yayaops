@@ -1,0 +1,9 @@
+###
+GET http://localhost:8080/update/gauge/Alloc/124.6
+Content-Type: text/plain
+
+> {%
+client.test("correct request", function() {
+  client.assert(response.status === 200, "Response status is not 200");
+})
+ %}

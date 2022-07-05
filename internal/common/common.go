@@ -3,7 +3,7 @@ package common
 type Gauge float64
 type Counter int64
 
-var GaugeMetrics = []string{
+var GaugeMetrics = [...]string{
 	// runtime
 	"Alloc",
 	"BuckHashSys",
@@ -36,7 +36,10 @@ var GaugeMetrics = []string{
 	"RandomValue",
 }
 
-var CounterMetrics = []string{
+var CounterMetrics = [...]string{
 	// other
 	"PollCount",
 }
+
+type GaugesData [len(GaugeMetrics)]Gauge
+type CountersData [len(CounterMetrics)]Counter
