@@ -7,8 +7,8 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"reflect"
 	"runtime"
-	"sync"
 	"time"
 )
 
@@ -19,16 +19,16 @@ const (
 )
 
 type metricsEngine struct {
-	sync.RWMutex
-	gauges   common.GaugesData
-	counters common.CountersData
-	counter  common.Counter
+	gauges    *common.Storage[common.Gauge]
+	counters  *common.Storage[common.Counter]
+	pollCount int64
 }
 
-var metrics = &metricsEngine{}
-
 func GetEngine() *metricsEngine {
-	return metrics
+	e := metricsEngine{}
+	e.gauges = common.NewStorage[common.Gauge]()
+	e.counters = common.NewStorage[common.Counter]()
+	return &e
 }
 
 // Start engine
@@ -77,117 +77,43 @@ func (m *metricsEngine) report(ctx context.Context) {
 }
 
 func (m *metricsEngine) fillMetrics() {
-	g := m.getGauges()
-	c := m.getCounters()
-	m.Lock()
-	m.gauges = g // todo: correct?
-	m.counters = c
-	m.Unlock()
-}
-
-func (m *metricsEngine) getGauges() (res common.GaugesData) {
 	var ms runtime.MemStats
 	runtime.ReadMemStats(&ms)
 
-	for i, metric := range common.GaugeMetrics {
-		switch metric {
-		case "Alloc":
-			res[i] = common.Gauge(ms.Alloc)
-		case "BuckHashSys":
-			res[i] = common.Gauge(ms.BuckHashSys)
-		case "Frees":
-			res[i] = common.Gauge(ms.Frees)
-		case "GCCPUFraction":
-			res[i] = common.Gauge(ms.GCCPUFraction)
-		case "GCSys":
-			res[i] = common.Gauge(ms.GCSys)
-		case "HeapAlloc":
-			res[i] = common.Gauge(ms.HeapAlloc)
-		case "HeapIdle":
-			res[i] = common.Gauge(ms.HeapIdle)
-		case "HeapInuse":
-			res[i] = common.Gauge(ms.HeapInuse)
-		case "HeapObjects":
-			res[i] = common.Gauge(ms.HeapObjects)
-		case "HeapReleased":
-			res[i] = common.Gauge(ms.HeapReleased)
-		case "HeapSys":
-			res[i] = common.Gauge(ms.HeapSys)
-		case "LastGC":
-			res[i] = common.Gauge(ms.LastGC)
-		case "Lookups":
-			res[i] = common.Gauge(ms.Lookups)
-		case "MCacheInuse":
-			res[i] = common.Gauge(ms.MCacheInuse)
-		case "MCacheSys":
-			res[i] = common.Gauge(ms.MCacheSys)
-		case "MSpanInuse":
-			res[i] = common.Gauge(ms.MSpanInuse)
-		case "MSpanSys":
-			res[i] = common.Gauge(ms.MSpanSys)
-		case "Mallocs":
-			res[i] = common.Gauge(ms.Mallocs)
-		case "NextGC":
-			res[i] = common.Gauge(ms.NextGC)
-		case "NumForcedGC":
-			res[i] = common.Gauge(ms.NumForcedGC)
-		case "NumGC":
-			res[i] = common.Gauge(ms.NumGC)
-		case "OtherSys":
-			res[i] = common.Gauge(ms.OtherSys)
-		case "PauseTotalNs":
-			res[i] = common.Gauge(ms.PauseTotalNs)
-		case "StackInuse":
-			res[i] = common.Gauge(ms.StackInuse)
-		case "StackSys":
-			res[i] = common.Gauge(ms.StackSys)
-		case "Sys":
-			res[i] = common.Gauge(ms.Sys)
-		case "TotalAlloc":
-			res[i] = common.Gauge(ms.TotalAlloc)
-		case "RandomValue":
-			res[i] = common.Gauge(rand.Float64())
+	for _, name := range common.RuntimeMNames {
+		switch v := reflect.ValueOf(ms).FieldByName(name); v.Kind() {
+		case reflect.Uint, reflect.Uint32, reflect.Uint64:
+			m.gauges.Set(name, common.Gauge(float64(v.Uint())))
+		case reflect.Float64:
+			m.gauges.Set(name, common.Gauge(v.Float()))
 		}
 	}
-	return res
-}
-
-func (m *metricsEngine) getCounters() (res common.CountersData) {
-	res[0] = m.counter
-	m.counter++
-	return res
+	m.gauges.Set("RandomValue", common.Gauge(rand.Float64()))
+	m.counters.Set("PollCount", common.Counter(m.pollCount))
+	m.pollCount++
 }
 
 func (m *metricsEngine) sendReport() {
-	m.RLock()
-	g := m.gauges
-	c := m.counters
-	m.RUnlock()
-	clnt := http.Client{}
-	for i, metric := range common.GaugeMetrics {
-		url := fmt.Sprintf("http://%s/update/gauge/%s/%f", addr, metric, g[i])
-		log.Println(url)
-		r, err := http.NewRequest("GET", url, nil)
-		if err != nil {
-			log.Println(err)
-			continue
+	sendStorage[common.Gauge](m.gauges)
+	sendStorage[common.Counter](m.counters)
+}
+
+func sendStorage[T common.Metric](storage common.Getter[T]) {
+	c := http.Client{}
+	for _, name := range storage.GetNames() {
+		if val, ok := storage.Get(name); ok {
+			url := fmt.Sprintf("http://%s/update/gauge/%s/%s", addr, name, val.String())
+			r, err := http.NewRequest("GET", url, nil)
+			if err != nil {
+				log.Println(url, err)
+				continue
+			}
+			if response, err := c.Do(r); err != nil {
+				log.Println(url, response, err)
+				continue
+			}
+		} else {
+			log.Println("sendGauges error: metric", name, "not found")
 		}
-		response, err := clnt.Do(r)
-		if err != nil {
-			log.Println(err)
-			continue
-		}
-		log.Println(response)
 	}
-	url := fmt.Sprintf("http://%s/update/counter/PollCount/%d", addr, c[0])
-	r, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		log.Println(err)
-	}
-	response, err := clnt.Do(r)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	log.Println(response)
 }
