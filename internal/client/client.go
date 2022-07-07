@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"reflect"
 	"runtime"
+	"strings"
 	"time"
 )
 
@@ -33,25 +34,25 @@ func GetEngine() *metricsEngine {
 
 // Start engine
 func (m *metricsEngine) Start(ctx context.Context) {
-	go m.poll(ctx)
+	go m.pollJob(ctx)
 }
 
-// poll metrics collection goroutine
-func (m *metricsEngine) poll(ctx context.Context) {
+// pollJob metrics collection goroutine
+func (m *metricsEngine) pollJob(ctx context.Context) {
 	// get metrics
-	m.fillMetrics()
+	m.pollMetrics()
 	ticker := time.NewTicker(pollInterval)
-	// start report goroutine
+	// start reportJob goroutine
 	ctxReport, cancelReport := context.WithCancel(ctx)
-	go m.report(ctxReport)
+	go m.reportJob(ctxReport)
 	for {
 		select {
 		case <-ticker.C:
-			m.fillMetrics()
-			log.Println("### poll", m.gauges, m.counters)
+			m.pollMetrics()
+			log.Println("### pollJob", m.gauges, m.counters)
 		case <-ctx.Done():
 			// todo: корректное завершение, сюда не доходит
-			log.Println("exit POLL")
+			log.Println("--- exit POLL")
 			ticker.Stop()
 			cancelReport()
 			return
@@ -59,24 +60,24 @@ func (m *metricsEngine) poll(ctx context.Context) {
 	}
 }
 
-// report - metrics sending goroutine
-func (m *metricsEngine) report(ctx context.Context) {
+// reportJob - metrics sending goroutine
+func (m *metricsEngine) reportJob(ctx context.Context) {
 	ticker := time.NewTicker(reportInterval)
 	for {
 		select {
 		case <-ticker.C:
-			log.Println("@@@ report")
+			log.Println("@@@ reportJob")
 			m.sendReport()
 		case <-ctx.Done():
 			// todo: корректное завершение, сюда не доходит
-			log.Println("exit report")
+			log.Println("--- exit reportJob")
 			ticker.Stop()
 			return
 		}
 	}
 }
 
-func (m *metricsEngine) fillMetrics() {
+func (m *metricsEngine) pollMetrics() {
 	var ms runtime.MemStats
 	runtime.ReadMemStats(&ms)
 
@@ -94,15 +95,16 @@ func (m *metricsEngine) fillMetrics() {
 }
 
 func (m *metricsEngine) sendReport() {
-	sendStorage[common.Gauge](m.gauges)
-	sendStorage[common.Counter](m.counters)
+	sendFromStorage[common.Gauge](m.gauges)
+	sendFromStorage[common.Counter](m.counters)
 }
 
-func sendStorage[T common.Metric](storage common.Getter[T]) {
+func sendFromStorage[T common.Metric](storage common.Getter[T]) {
+	st := metricType[T]()
 	c := http.Client{}
 	for _, name := range storage.GetNames() {
 		if val, ok := storage.Get(name); ok {
-			url := fmt.Sprintf("http://%s/update/gauge/%s/%s", addr, name, val.String())
+			url := fmt.Sprintf("http://%s/update/%s/%s/%s", addr, st, name, val.String())
 			r, err := http.NewRequest("GET", url, nil)
 			if err != nil {
 				log.Println(url, err)
@@ -116,4 +118,10 @@ func sendStorage[T common.Metric](storage common.Getter[T]) {
 			log.Println("sendGauges error: metric", name, "not found")
 		}
 	}
+}
+
+func metricType[T common.Metric]() string {
+	var v T
+	ss := strings.Split(reflect.TypeOf(v).String(), ".")
+	return strings.ToLower(ss[len(ss)-1])
 }
