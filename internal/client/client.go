@@ -78,9 +78,9 @@ func (m *metricsEngine) reportJob(ctx context.Context) {
 }
 
 func (m *metricsEngine) pollMetrics() {
+	// runtime
 	var ms runtime.MemStats
 	runtime.ReadMemStats(&ms)
-
 	for _, name := range common.RuntimeMNames {
 		switch v := reflect.ValueOf(ms).FieldByName(name); v.Kind() {
 		case reflect.Uint, reflect.Uint32, reflect.Uint64:
@@ -89,7 +89,9 @@ func (m *metricsEngine) pollMetrics() {
 			m.gauges.Set(name, common.Gauge(v.Float()))
 		}
 	}
+	// custom Gauges
 	m.gauges.Set("RandomValue", common.Gauge(rand.Float64()))
+	// custom Counters
 	m.counters.Set("PollCount", common.Counter(m.pollCount))
 	m.pollCount++
 }
@@ -100,19 +102,18 @@ func (m *metricsEngine) sendReport() {
 }
 
 func sendFromStorage[T common.Metric](storage common.Getter[T]) {
-	st := metricType[T]()
+	mt := metricType[T]()
 	c := http.Client{}
 	for _, name := range storage.GetNames() {
 		if val, ok := storage.Get(name); ok {
-			url := fmt.Sprintf("http://%s/update/%s/%s/%s", addr, st, name, val.String())
-			r, err := http.NewRequest("GET", url, nil)
+			url := fmt.Sprintf("http://%s/update/%s/%s/%s", addr, mt, name, val.String())
+			r, err := http.NewRequest("POST", url, nil)
 			if err != nil {
 				log.Println(url, err)
 				continue
 			}
-			if response, err := c.Do(r); err != nil {
-				log.Println(url, response, err)
-				continue
+			if resp, err := c.Do(r); err != nil {
+				log.Println(url, resp, err)
 			}
 		} else {
 			log.Println("sendGauges error: metric", name, "not found")
