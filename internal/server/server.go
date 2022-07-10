@@ -50,11 +50,11 @@ func parseURI(uri string) int {
 			case "counter":
 				metric = common.Counter(0)
 			default:
-				return http.StatusNotFound
+				return http.StatusNotImplemented
 			}
 		case 3: // metric name
 			if p == "" {
-				return http.StatusBadRequest
+				return http.StatusNotFound
 			}
 		case 4: // value
 			if p == "" {

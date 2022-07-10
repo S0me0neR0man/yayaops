@@ -43,11 +43,27 @@ func TestStatusHandler(t *testing.T) {
 			},
 		},
 		{
-			name: "#4 invalid type",
+			name: "#4 without id",
 			want: want{
-				url:    "/update/Alloc/124.6",
+				url:    "/update/counter/",
 				method: http.MethodPost,
 				code:   404,
+			},
+		},
+		{
+			name: "#5 without id",
+			want: want{
+				url:    "/update/gauge/",
+				method: http.MethodPost,
+				code:   404,
+			},
+		},
+		{
+			name: "#6 without id",
+			want: want{
+				url:    "/update/unknown/testCounter/100",
+				method: http.MethodPost,
+				code:   501,
 			},
 		},
 	}
