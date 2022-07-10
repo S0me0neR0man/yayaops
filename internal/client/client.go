@@ -78,7 +78,7 @@ func (m *metricsEngine) reportJob(ctx context.Context) {
 }
 
 func (m *metricsEngine) pollMetrics() {
-	// runtime
+	// runtime Gauges
 	var ms runtime.MemStats
 	runtime.ReadMemStats(&ms)
 	for _, name := range common.RuntimeMNames {
