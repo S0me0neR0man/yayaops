@@ -2,6 +2,7 @@ package server
 
 import (
 	"github.com/S0me0neR0man/yayaops/internal/common"
+	"github.com/gorilla/mux"
 	"log"
 	"net/http"
 	"strings"
@@ -23,13 +24,33 @@ func New() *Server {
 	return &s
 }
 
-func (s *Server) Start() {
-	http.HandleFunc("/", oneForAllHandler)
-	server := &http.Server{Addr: addr}
-	err := server.ListenAndServe()
-	if err != nil {
-		log.Println(err)
-	}
+func (s *Server) Start() error {
+	/*
+		http.HandleFunc("/", oneForAllHandler)
+		server := &http.Server{Addr: addr}
+		err := server.ListenAndServe()
+		if err != nil {
+			log.Println(err)
+		}
+	*/
+	router := mux.NewRouter()
+	router.Use(s.logging)
+	router.HandleFunc("/s/{stash}", s.stashGetHandler).Methods("POST")
+	return http.ListenAndServe(":8080", router)
+}
+
+// logging the handler for logging requests
+func (s *Server) logging(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log.Println(r.Method, r.RequestURI)
+		next.ServeHTTP(w, r)
+	})
+}
+
+// stashGetHandler stash getting request handler
+func (sr *Server) stashGetHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	log.Println(vars)
 }
 
 func parseURI(uri string) int {
