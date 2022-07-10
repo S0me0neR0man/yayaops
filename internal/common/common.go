@@ -94,9 +94,11 @@ func (s *Storage[T]) Get(name string) (T, bool) {
 func (s *Storage[T]) GetNames() []string {
 	names := make([]string, len(s.data))
 	i := 0
+	s.RLock()
 	for k := range s.data {
 		names[i] = k
 		i++
 	}
+	s.RUnlock()
 	return names
 }
