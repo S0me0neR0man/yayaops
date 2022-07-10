@@ -69,8 +69,8 @@ type Storage[T Metric] struct {
 	data map[string]T
 }
 
-// NewStorage the constructor
-func NewStorage[T Metric]() *Storage[T] {
+// New the constructor
+func New[T Metric]() *Storage[T] {
 	s := Storage[T]{}
 	s.data = make(map[string]T)
 	return &s

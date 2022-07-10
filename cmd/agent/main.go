@@ -8,7 +8,7 @@ import (
 
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
-	client.GetEngine().Start(ctx)
+	client.New().Start(ctx)
 	time.Sleep(15 * time.Second)
 	cancel()
 }

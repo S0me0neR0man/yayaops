@@ -1,5 +1,5 @@
 ###
-GET http://localhost:8080/update/gauge/Alloc/124.6
+POST http://localhost:8080/update/gauge/Alloc/124.6
 Content-Type: text/plain
 
 > {%

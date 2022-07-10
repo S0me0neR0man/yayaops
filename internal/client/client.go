@@ -24,10 +24,10 @@ type metricsEngine struct {
 	pollCount int64
 }
 
-func GetEngine() *metricsEngine {
+func New() *metricsEngine {
 	e := metricsEngine{}
-	e.gauges = common.NewStorage[common.Gauge]()
-	e.counters = common.NewStorage[common.Counter]()
+	e.gauges = common.New[common.Gauge]()
+	e.counters = common.New[common.Counter]()
 	return &e
 }
 
