@@ -21,7 +21,7 @@ func TestStatusHandler(t *testing.T) {
 		{
 			name: "#1 positive",
 			want: want{
-				url:    "/update/gauge/Alloc/124.6",
+				url:    "/update/counter/Alloc/124",
 				method: http.MethodPost,
 				code:   200,
 			},
@@ -35,11 +35,11 @@ func TestStatusHandler(t *testing.T) {
 			},
 		},
 		{
-			name: "#3 invalid name",
+			name: "#3 invalid value",
 			want: want{
-				url:    "/update/gauge/BUGAlloc/124.6",
+				url:    "/update/gauge/BUGAlloc/none",
 				method: http.MethodPost,
-				code:   404,
+				code:   400,
 			},
 		},
 		{

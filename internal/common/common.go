@@ -2,27 +2,43 @@ package common
 
 import (
 	"fmt"
+	"strconv"
 	"sync"
 )
 
+type FromStringer interface {
+	FromString(string) (any, error)
+}
+
+// Gauge metrics
 type Gauge float64
 
 func (g Gauge) String() string {
 	return fmt.Sprintf("%f", g)
 }
 
+func (g Gauge) FromString(s string) (any, error) {
+	return strconv.ParseFloat(s, 64)
+}
+
+// Counter metrics
 type Counter int64
 
 func (c Counter) String() string {
 	return fmt.Sprintf("%d", c)
 }
 
+func (c Counter) FromString(s string) (any, error) {
+	return strconv.Atoi(s)
+}
+
+// Metric generic metric
 type Metric interface {
 	Gauge | Counter
 	fmt.Stringer
 }
 
-var RuntimeMNames = [...]string{
+var RuntimeMNames = []string{
 	"Alloc",
 	"BuckHashSys",
 	"Frees",
@@ -50,6 +66,15 @@ var RuntimeMNames = [...]string{
 	"StackSys",
 	"Sys",
 	"TotalAlloc",
+}
+
+var CustomMNames = []string{
+	"RandomValue",
+	"PollCount",
+}
+
+func ValidMetricsName() []string {
+	return append(RuntimeMNames, CustomMNames[0], CustomMNames[1])
 }
 
 // Getter interface for get Metric
