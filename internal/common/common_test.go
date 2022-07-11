@@ -34,7 +34,7 @@ func TestGauge_String(t *testing.T) {
 		{
 			name: "test Gauge",
 			g:    10.01,
-			want: "10.010000",
+			want: "10.01",
 		},
 	}
 	for _, tt := range tests {

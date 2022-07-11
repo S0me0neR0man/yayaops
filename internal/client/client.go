@@ -102,10 +102,11 @@ func (m *metricsEngine) sendReport() {
 }
 
 func sendFromStorage[T common.Metric](storage common.Getter[T]) {
-	mt := metricType[T]()
+	//	mt := metricType[T]()
 	c := http.Client{}
 	for _, name := range storage.GetNames() {
 		if val, ok := storage.Get(name); ok {
+			mt := typeOfValue(val)
 			url := fmt.Sprintf("http://%s/update/%s/%s/%s", addr, mt, name, val.String())
 			r, err := http.NewRequest("POST", url, nil)
 			if err != nil {
@@ -121,8 +122,7 @@ func sendFromStorage[T common.Metric](storage common.Getter[T]) {
 	}
 }
 
-func metricType[T common.Metric]() string {
-	var v T
-	ss := strings.Split(reflect.TypeOf(v).String(), ".")
+func typeOfValue(val any) string {
+	ss := strings.Split(reflect.ValueOf(val).Type().String(), ".")
 	return strings.ToLower(ss[len(ss)-1])
 }
