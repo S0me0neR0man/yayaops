@@ -9,6 +9,17 @@ import (
 
 const (
 	addr = "127.0.0.1:8080"
+
+	TypeGauge   = "gauge"
+	TypeCounter = "counter"
+
+	OperUpdateMetric = "update"
+	OperGetMetric    = "value"
+
+	VarOper   = "oper"
+	VarType   = "type"
+	VarMetric = "metric"
+	VarValue  = "value"
 )
 
 type Server struct {
@@ -60,27 +71,27 @@ func (s *Server) metricsPostHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Ok, just do it
-	if vars["value"] == "" {
+	if vars[VarValue] == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	switch vars["type"] {
-	case "gauge":
-		if v, err := common.Gauge(0).From(vars["value"]); err != nil {
+	switch vars[VarType] {
+	case TypeGauge:
+		if v, err := common.Gauge(0).From(vars[VarValue]); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		} else {
-			s.gauges.Set(vars["metric"], v.(common.Gauge))
+			s.gauges.Set(vars[VarMetric], v.(common.Gauge))
 		}
-	case "counter":
-		if v, err := common.Counter(0).From(vars["value"]); err != nil {
+	case TypeCounter:
+		if v, err := common.Counter(0).From(vars[VarValue]); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		} else {
-			if old, ok := s.counters.Get(vars["metric"]); ok {
-				s.counters.Set(vars["metric"], old+v.(common.Counter))
+			if old, ok := s.counters.Get(vars[VarMetric]); ok {
+				s.counters.Set(vars[VarMetric], old+v.(common.Counter))
 			} else {
-				s.counters.Set(vars["metric"], v.(common.Counter))
+				s.counters.Set(vars[VarMetric], v.(common.Counter))
 			}
 		}
 	}
@@ -88,7 +99,7 @@ func (s *Server) metricsPostHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// metricsPostHandler
+// metricsGetHandler
 func (s *Server) metricsGetHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	// checks
@@ -97,16 +108,16 @@ func (s *Server) metricsGetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Ok, just do it
-	switch vars["type"] {
-	case "gauge":
-		if v, ok := s.gauges.Get(vars["metric"]); ok {
+	switch vars[VarType] {
+	case TypeGauge:
+		if v, ok := s.gauges.Get(vars[VarMetric]); ok {
 			w.Write([]byte(v.String()))
 		} else {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-	case "counter":
-		if v, ok := s.counters.Get(vars["metric"]); ok {
+	case TypeCounter:
+		if v, ok := s.counters.Get(vars[VarMetric]); ok {
 			w.Write([]byte(v.String()))
 		} else {
 			w.WriteHeader(http.StatusNotFound)
@@ -118,21 +129,21 @@ func (s *Server) metricsGetHandler(w http.ResponseWriter, r *http.Request) {
 func checkURI(vars map[string]string) int {
 	for key, val := range vars {
 		switch key {
-		case "oper": // operation
+		case VarOper: // operation
 			switch val {
-			case "update":
-			case "value":
+			case OperUpdateMetric:
+			case OperGetMetric:
 			default:
 				return http.StatusNotFound
 			}
-		case "type": // metric type
+		case VarType: // metric type
 			switch val {
-			case "gauge":
-			case "counter":
+			case TypeGauge:
+			case TypeCounter:
 			default:
 				return http.StatusNotImplemented
 			}
-		case "metric": // metric name
+		case VarMetric: // metric name
 			if val == "" {
 				return http.StatusNotFound
 			}

@@ -14,7 +14,7 @@ type ValueFromString interface {
 type Gauge float64
 
 func (g Gauge) String() string {
-	return fmt.Sprintf("%f", g)
+	return fmt.Sprintf("%v", float64(g))
 }
 
 func (g Gauge) From(s string) (any, error) {
