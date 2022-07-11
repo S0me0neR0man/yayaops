@@ -1,6 +1,7 @@
 package server
 
 import (
+	"github.com/gorilla/mux"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -23,23 +24,23 @@ func TestStatusHandler(t *testing.T) {
 			want: want{
 				url:    "/update/counter/Alloc/124",
 				method: http.MethodPost,
-				code:   200,
+				code:   http.StatusOK,
 			},
 		},
-		{
+		/*{
 			name: "#2 wrong method",
 			want: want{
 				url:    "/update/gauge/Alloc/124.6",
-				method: http.MethodGet,
-				code:   406,
+				method: http.MethodDelete,
+				code:   http.StatusNotAcceptable,
 			},
-		},
+		},*/
 		{
 			name: "#3 invalid value",
 			want: want{
 				url:    "/update/gauge/BUGAlloc/none",
 				method: http.MethodPost,
-				code:   400,
+				code:   http.StatusBadRequest,
 			},
 		},
 		{
@@ -47,7 +48,7 @@ func TestStatusHandler(t *testing.T) {
 			want: want{
 				url:    "/update/counter/",
 				method: http.MethodPost,
-				code:   404,
+				code:   http.StatusNotFound,
 			},
 		},
 		{
@@ -55,34 +56,35 @@ func TestStatusHandler(t *testing.T) {
 			want: want{
 				url:    "/update/gauge/",
 				method: http.MethodPost,
-				code:   404,
+				code:   http.StatusNotFound,
 			},
 		},
 		{
-			name: "#6 without id",
+			name: "#6 wrong oper",
 			want: want{
 				url:    "/update/unknown/testCounter/100",
 				method: http.MethodPost,
-				code:   501,
+				code:   http.StatusNotImplemented,
 			},
 		},
 	}
 
+	s := New()
 	for _, tt := range tests {
-		// запускаем каждый тест
 		t.Run(tt.name, func(t *testing.T) {
 			request := httptest.NewRequest(tt.want.method, tt.want.url, nil)
 
-			// создаём новый Recorder
 			w := httptest.NewRecorder()
-			// определяем хендлер
-			h := http.HandlerFunc(oneForAllHandler)
-			// запускаем сервер
-			h.ServeHTTP(w, request)
-			res := w.Result()
 
-			// проверяем код ответа
-			if res.StatusCode != tt.want.code {
+			router := mux.NewRouter()
+			router.HandleFunc("/{oper}/{type}/{metric}/{value}", s.metricsPostHandler)
+			router.ServeHTTP(w, request)
+
+			//h := http.HandlerFunc(s.metricsPostHandler)
+			//h.ServeHTTP(w, request)
+			//res := w.Result()
+
+			if w.Code != tt.want.code {
 				t.Errorf("Expected status code %d, got %d", tt.want.code, w.Code)
 			}
 

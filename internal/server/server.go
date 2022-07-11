@@ -5,7 +5,6 @@ import (
 	"github.com/gorilla/mux"
 	"log"
 	"net/http"
-	"strings"
 )
 
 const (
@@ -25,21 +24,21 @@ func New() *Server {
 }
 
 func (s *Server) Start() error {
-	/*
-		http.HandleFunc("/", oneForAllHandler)
-		server := &http.Server{Addr: addr}
-		err := server.ListenAndServe()
-		if err != nil {
-			log.Println(err)
-		}
-	*/
 	router := mux.NewRouter()
+
+	// middleware
 	router.Use(s.logging)
-	router.HandleFunc("/s/{stash}", s.stashGetHandler).Methods("POST")
-	return http.ListenAndServe(":8080", router)
+
+	router.HandleFunc("/{oper}/{type}/{metric}/{value}", s.metricsPostHandler).Methods(http.MethodPost)
+	router.HandleFunc("/{oper}/{type}/{metric}", s.metricsGetHandler).Methods(http.MethodGet)
+
+	router.HandleFunc("/{oper}/{type}/{metric}/{value}", s.notAcceptableHandler)
+	router.HandleFunc("/{oper}/{type}/{metric}", s.notAcceptableHandler)
+
+	return http.ListenAndServe(addr, router)
 }
 
-// logging the handler for logging requests
+// logging middleware
 func (s *Server) logging(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Println(r.Method, r.RequestURI)
@@ -47,78 +46,97 @@ func (s *Server) logging(next http.Handler) http.Handler {
 	})
 }
 
-// stashGetHandler stash getting request handler
-func (sr *Server) stashGetHandler(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	log.Println(vars)
+// notAllowedHandler the handler of incorrect requests
+func (s *Server) notAcceptableHandler(w http.ResponseWriter, r *http.Request) {
+	http.Error(w, "Not Allowed", http.StatusNotAcceptable)
 }
 
-func parseURI(uri string) int {
-	res := http.StatusNotAcceptable
-	path := strings.Split(uri, "/")
-	var metric any
+// metricsPostHandler
+func (s *Server) metricsPostHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	// checks
+	if status := checkURI(vars); status != http.StatusOK {
+		w.WriteHeader(status)
+		return
+	}
+	// Ok, just do it
+	if vars["value"] == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	switch vars["type"] {
+	case "gauge":
+		if v, err := common.Gauge(0).From(vars["value"]); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		} else {
+			s.gauges.Set(vars["metric"], v.(common.Gauge))
+		}
+	case "counter":
+		if v, err := common.Counter(0).From(vars["value"]); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		} else {
+			if old, ok := s.counters.Get(vars["metric"]); ok {
+				s.counters.Set(vars["metric"], old+v.(common.Counter))
+			} else {
+				s.counters.Set(vars["metric"], v.(common.Counter))
+			}
+		}
+	}
 
-	for i, p := range path {
-		switch i {
-		case 1: // operation
-			if p != "update" {
+	w.WriteHeader(http.StatusOK)
+}
+
+// metricsPostHandler
+func (s *Server) metricsGetHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	// checks
+	if status := checkURI(vars); status != http.StatusOK {
+		w.WriteHeader(status)
+		return
+	}
+	// Ok, just do it
+	switch vars["type"] {
+	case "gauge":
+		if v, ok := s.gauges.Get(vars["metric"]); ok {
+			w.Write([]byte(v.String()))
+		} else {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+	case "counter":
+		if v, ok := s.counters.Get(vars["metric"]); ok {
+			w.Write([]byte(v.String()))
+		} else {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+	}
+}
+
+func checkURI(vars map[string]string) int {
+	for key, val := range vars {
+		switch key {
+		case "oper": // operation
+			switch val {
+			case "update":
+			case "value":
+			default:
 				return http.StatusNotFound
 			}
-		case 2: // type
-			switch p {
+		case "type": // metric type
+			switch val {
 			case "gauge":
-				metric = common.Gauge(0)
 			case "counter":
-				metric = common.Counter(0)
 			default:
 				return http.StatusNotImplemented
 			}
-		case 3: // metric name
-			if p == "" {
+		case "metric": // metric name
+			if val == "" {
 				return http.StatusNotFound
 			}
-		case 4: // value
-			if p == "" {
-				res = http.StatusBadRequest
-			}
-			switch v, ok := metric.(common.Gauge); ok {
-			case true: // Gauge
-				if _, err := v.FromString(p); err != nil {
-					res = http.StatusBadRequest
-				} else {
-					res = http.StatusOK
-				}
-			case false: // Counter
-				if _, err := metric.(common.Counter).FromString(p); err != nil {
-					res = http.StatusBadRequest
-				} else {
-					res = http.StatusOK
-				}
-			}
-			if v, ok := metric.(common.Counter); ok {
-				if _, err := v.FromString(p); err == nil {
-					return http.StatusOK
-				} else {
-					return http.StatusBadRequest
-				}
-			}
 		}
 	}
-	return res
-}
-
-func oneForAllHandler(w http.ResponseWriter, r *http.Request) {
-	log.Println(r.RequestURI)
-
-	switch r.Method {
-	case "POST":
-		w.WriteHeader(parseURI(r.RequestURI))
-		_, err := w.Write([]byte(r.RequestURI))
-		if err != nil {
-			log.Println(err)
-			return
-		}
-	default:
-		w.WriteHeader(http.StatusNotAcceptable)
-	}
+	return http.StatusOK
 }

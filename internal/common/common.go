@@ -6,8 +6,8 @@ import (
 	"sync"
 )
 
-type FromStringer interface {
-	FromString(string) (any, error)
+type ValueFromString interface {
+	From(string) (any, error)
 }
 
 // Gauge metrics
@@ -17,8 +17,12 @@ func (g Gauge) String() string {
 	return fmt.Sprintf("%f", g)
 }
 
-func (g Gauge) FromString(s string) (any, error) {
-	return strconv.ParseFloat(s, 64)
+func (g Gauge) From(s string) (any, error) {
+	if v, err := strconv.ParseFloat(s, 64); err != nil {
+		return nil, err
+	} else {
+		return Gauge(v), nil
+	}
 }
 
 // Counter metrics
@@ -28,8 +32,12 @@ func (c Counter) String() string {
 	return fmt.Sprintf("%d", c)
 }
 
-func (c Counter) FromString(s string) (any, error) {
-	return strconv.Atoi(s)
+func (c Counter) From(s string) (any, error) {
+	if v, err := strconv.Atoi(s); err != nil {
+		return nil, err
+	} else {
+		return Counter(v), nil
+	}
 }
 
 // Metric generic metric
