@@ -41,12 +41,12 @@ func (m *metricsEngine) Start(ctx context.Context) *metricsEngine {
 	return m
 }
 
-// Stop engine
-func (m *metricsEngine) Stop() {
+// WaitShutdown wait for a stop goroutines
+func (m *metricsEngine) WaitShutdown() {
 	m.wg.Wait()
 }
 
-// pollJob metrics collection goroutine
+// pollJob goroutine for collect metrics
 func (m *metricsEngine) pollJob(ctx context.Context) {
 	// get metrics
 	m.pollMetrics()
@@ -70,7 +70,7 @@ func (m *metricsEngine) pollJob(ctx context.Context) {
 	}
 }
 
-// reportJob - metrics sending goroutine
+// reportJob goroutine for send report
 func (m *metricsEngine) reportJob(ctx context.Context) {
 	ticker := time.NewTicker(reportInterval)
 	for {

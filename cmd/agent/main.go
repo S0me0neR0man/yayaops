@@ -11,5 +11,5 @@ func main() {
 	c := client.New().Start(ctx)
 	time.Sleep(15 * time.Second)
 	cancel()
-	c.Stop()
+	c.WaitShutdown()
 }
