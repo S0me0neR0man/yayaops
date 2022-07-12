@@ -16,10 +16,10 @@ const (
 	OperUpdateMetric = "update"
 	OperGetMetric    = "value"
 
-	VarOper   = "oper"
-	VarType   = "type"
-	VarMetric = "metric"
-	VarValue  = "value"
+	MuxVarOper   = "oper"
+	MuxVarType   = "type"
+	MuxVarMetric = "metric"
+	MuxVarValue  = "value"
 )
 
 type Server struct {
@@ -57,7 +57,7 @@ func (s *Server) logging(next http.Handler) http.Handler {
 	})
 }
 
-// notAllowedHandler the handler of incorrect requests
+// notAcceptableHandler the handler of incorrect requests
 func (s *Server) notAcceptableHandler(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "Not Allowed", http.StatusNotAcceptable)
 }
@@ -71,27 +71,27 @@ func (s *Server) metricsPostHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Ok, just do it
-	if vars[VarValue] == "" {
+	if vars[MuxVarValue] == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	switch vars[VarType] {
+	switch vars[MuxVarType] {
 	case TypeGauge:
-		if v, err := common.Gauge(0).From(vars[VarValue]); err != nil {
+		if v, err := common.Gauge(0).From(vars[MuxVarValue]); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		} else {
-			s.gauges.Set(vars[VarMetric], v.(common.Gauge))
+			s.gauges.Set(vars[MuxVarMetric], v.(common.Gauge))
 		}
 	case TypeCounter:
-		if v, err := common.Counter(0).From(vars[VarValue]); err != nil {
+		if v, err := common.Counter(0).From(vars[MuxVarValue]); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		} else {
-			if old, ok := s.counters.Get(vars[VarMetric]); ok {
-				s.counters.Set(vars[VarMetric], old+v.(common.Counter))
+			if old, ok := s.counters.Get(vars[MuxVarMetric]); ok {
+				s.counters.Set(vars[MuxVarMetric], old+v.(common.Counter))
 			} else {
-				s.counters.Set(vars[VarMetric], v.(common.Counter))
+				s.counters.Set(vars[MuxVarMetric], v.(common.Counter))
 			}
 		}
 	}
@@ -108,16 +108,16 @@ func (s *Server) metricsGetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Ok, just do it
-	switch vars[VarType] {
+	switch vars[MuxVarType] {
 	case TypeGauge:
-		if v, ok := s.gauges.Get(vars[VarMetric]); ok {
+		if v, ok := s.gauges.Get(vars[MuxVarMetric]); ok {
 			w.Write([]byte(v.String()))
 		} else {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
 	case TypeCounter:
-		if v, ok := s.counters.Get(vars[VarMetric]); ok {
+		if v, ok := s.counters.Get(vars[MuxVarMetric]); ok {
 			w.Write([]byte(v.String()))
 		} else {
 			w.WriteHeader(http.StatusNotFound)
@@ -129,21 +129,21 @@ func (s *Server) metricsGetHandler(w http.ResponseWriter, r *http.Request) {
 func checkURI(vars map[string]string) int {
 	for key, val := range vars {
 		switch key {
-		case VarOper: // operation
+		case MuxVarOper: // operation
 			switch val {
 			case OperUpdateMetric:
 			case OperGetMetric:
 			default:
 				return http.StatusNotFound
 			}
-		case VarType: // metric type
+		case MuxVarType: // metric type
 			switch val {
 			case TypeGauge:
 			case TypeCounter:
 			default:
 				return http.StatusNotImplemented
 			}
-		case VarMetric: // metric name
+		case MuxVarMetric: // metric name
 			if val == "" {
 				return http.StatusNotFound
 			}

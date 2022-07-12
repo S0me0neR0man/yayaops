@@ -6,6 +6,45 @@ import (
 	"sync"
 )
 
+var RuntimeMNames = []string{
+	"Alloc",
+	"BuckHashSys",
+	"Frees",
+	"GCCPUFraction",
+	"GCSys",
+	"HeapAlloc",
+	"HeapIdle",
+	"HeapInuse",
+	"HeapObjects",
+	"HeapReleased",
+	"HeapSys",
+	"LastGC",
+	"Lookups",
+	"MCacheInuse",
+	"MCacheSys",
+	"MSpanInuse",
+	"MSpanSys",
+	"Mallocs",
+	"NextGC",
+	"NumForcedGC",
+	"NumGC",
+	"OtherSys",
+	"PauseTotalNs",
+	"StackInuse",
+	"StackSys",
+	"Sys",
+	"TotalAlloc",
+}
+
+var CustomMNames = []string{
+	"RandomValue",
+	"PollCount",
+}
+
+func ValidMetricsName() []string {
+	return append(RuntimeMNames, CustomMNames[0], CustomMNames[1])
+}
+
 type ValueFromString interface {
 	From(string) (any, error)
 }
@@ -46,52 +85,13 @@ type Metric interface {
 	fmt.Stringer
 }
 
-var RuntimeMNames = []string{
-	"Alloc",
-	"BuckHashSys",
-	"Frees",
-	"GCCPUFraction",
-	"GCSys",
-	"HeapAlloc",
-	"HeapIdle",
-	"HeapInuse",
-	"HeapObjects",
-	"HeapReleased",
-	"HeapSys",
-	"LastGC",
-	"Lookups",
-	"MCacheInuse",
-	"MCacheSys",
-	"MSpanInuse",
-	"MSpanSys",
-	"Mallocs",
-	"NextGC",
-	"NumForcedGC",
-	"NumGC",
-	"OtherSys",
-	"PauseTotalNs",
-	"StackInuse",
-	"StackSys",
-	"Sys",
-	"TotalAlloc",
-}
-
-var CustomMNames = []string{
-	"RandomValue",
-	"PollCount",
-}
-
-func ValidMetricsName() []string {
-	return append(RuntimeMNames, CustomMNames[0], CustomMNames[1])
-}
-
-// Getter interface for get Metric
+// Getter interface
 type Getter[T Metric] interface {
 	Get(string) (T, bool)
 	GetNames() []string
 }
 
-// Setter interface for set Metric
+// Setter interface for
 type Setter[T Metric] interface {
 	Set(string, T)
 }

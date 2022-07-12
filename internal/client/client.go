@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -23,6 +24,7 @@ type metricsEngine struct {
 	gauges    *common.Storage[common.Gauge]
 	counters  *common.Storage[common.Counter]
 	pollCount int64
+	wg        sync.WaitGroup
 }
 
 func New() *metricsEngine {
@@ -33,8 +35,15 @@ func New() *metricsEngine {
 }
 
 // Start engine
-func (m *metricsEngine) Start(ctx context.Context) {
+func (m *metricsEngine) Start(ctx context.Context) *metricsEngine {
+	m.wg.Add(1)
 	go m.pollJob(ctx)
+	return m
+}
+
+// Stop engine
+func (m *metricsEngine) Stop() {
+	m.wg.Wait()
 }
 
 // pollJob metrics collection goroutine
@@ -44,6 +53,7 @@ func (m *metricsEngine) pollJob(ctx context.Context) {
 	ticker := time.NewTicker(pollInterval)
 	// start reportJob goroutine
 	ctxReport, cancelReport := context.WithCancel(ctx)
+	m.wg.Add(1)
 	go m.reportJob(ctxReport)
 	for {
 		select {
@@ -51,10 +61,10 @@ func (m *metricsEngine) pollJob(ctx context.Context) {
 			m.pollMetrics()
 			log.Println("### pollJob", m.gauges, m.counters)
 		case <-ctx.Done():
-			// todo: корректное завершение, сюда не доходит
 			log.Println("--- exit POLL")
 			ticker.Stop()
 			cancelReport()
+			m.wg.Done()
 			return
 		}
 	}
@@ -69,9 +79,9 @@ func (m *metricsEngine) reportJob(ctx context.Context) {
 			log.Println("@@@ reportJob")
 			m.sendReport()
 		case <-ctx.Done():
-			// todo: корректное завершение, сюда не доходит
 			log.Println("--- exit reportJob")
 			ticker.Stop()
+			m.wg.Done()
 			return
 		}
 	}
