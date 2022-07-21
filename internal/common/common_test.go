@@ -1,13 +1,15 @@
 package common
 
 import (
+	"fmt"
+	"strconv"
 	"testing"
 )
 
 func TestCounter_String(t *testing.T) {
 	tests := []struct {
 		name string
-		c    Counter
+		c    int64
 		want string
 	}{
 		{
@@ -18,7 +20,7 @@ func TestCounter_String(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.c.String(); got != tt.want {
+			if got := strconv.FormatInt(tt.c, 10); got != tt.want {
 				t.Errorf("String() = %v, want %v", got, tt.want)
 			}
 		})
@@ -28,7 +30,7 @@ func TestCounter_String(t *testing.T) {
 func TestGauge_String(t *testing.T) {
 	tests := []struct {
 		name string
-		g    Gauge
+		g    float64
 		want string
 	}{
 		{
@@ -39,7 +41,7 @@ func TestGauge_String(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.g.String(); got != tt.want {
+			if got := fmt.Sprintf("%v", tt.g); got != tt.want {
 				t.Errorf("String() = %v, want %v", got, tt.want)
 			}
 		})
