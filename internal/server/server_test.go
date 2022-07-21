@@ -22,14 +22,6 @@ func TestHandlers(t *testing.T) {
 		want want
 	}{
 		{
-			name: "#0 set ",
-			want: want{
-				url:    "/update/gauge/val/100.3567",
-				method: http.MethodPost,
-				code:   http.StatusOK,
-			},
-		},
-		{
 			name: "#1 positive",
 			want: want{
 				url:    "/update/counter/Alloc/124",
@@ -100,16 +92,12 @@ func TestHandlers(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			request := httptest.NewRequest(tt.want.method, tt.want.url, nil)
+			// request.Header.Set("Content-Type", "text/plain")
 
 			w := httptest.NewRecorder()
 
 			router := mux.NewRouter()
-			router.HandleFunc("/{oper}/{type}/{metric}/{value}", s.metricsPostHandler).Methods(http.MethodPost)
-			router.HandleFunc("/{oper}/{type}/{metric}", s.metricsGetHandler).Methods(http.MethodGet)
-
-			router.HandleFunc("/{oper}/{type}/{metric}/{value}", s.notAcceptableHandler)
-			router.HandleFunc("/{oper}/{type}/{metric}", s.notAcceptableHandler)
-
+			s.setHandlers(router)
 			router.ServeHTTP(w, request)
 
 			//h := http.HandlerFunc(s.metricsPostHandler)

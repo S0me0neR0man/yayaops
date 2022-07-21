@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 	"github.com/S0me0neR0man/yayaops/internal/common"
+	"github.com/S0me0neR0man/yayaops/internal/server"
 	"log"
 	"math/rand"
 	"net/http"
 	"reflect"
 	"runtime"
-	"strings"
 	"sync"
 	"time"
 )
@@ -21,16 +21,14 @@ const (
 )
 
 type metricsEngine struct {
-	gauges    *common.Storage[common.Gauge]
-	counters  *common.Storage[common.Counter]
+	storage   *common.Storage
 	pollCount int64
 	wg        sync.WaitGroup
 }
 
 func New() *metricsEngine {
 	e := metricsEngine{}
-	e.gauges = common.New[common.Gauge]()
-	e.counters = common.New[common.Counter]()
+	e.storage = common.NewStorage()
 	return &e
 }
 
@@ -59,7 +57,7 @@ func (m *metricsEngine) pollJob(ctx context.Context) {
 		select {
 		case <-ticker.C:
 			m.pollMetrics()
-			log.Println("### pollJob", m.gauges, m.counters)
+			log.Println("### pollJob", m.storage)
 		case <-ctx.Done():
 			log.Println("--- exit POLL")
 			ticker.Stop()
@@ -88,36 +86,24 @@ func (m *metricsEngine) reportJob(ctx context.Context) {
 }
 
 func (m *metricsEngine) pollMetrics() {
-	// runtime Gauges
+	// runtime metrics
 	var ms runtime.MemStats
 	runtime.ReadMemStats(&ms)
 	for _, name := range common.RuntimeMNames {
-		switch v := reflect.ValueOf(ms).FieldByName(name); v.Kind() {
-		case reflect.Uint, reflect.Uint32, reflect.Uint64:
-			m.gauges.Set(name, common.Gauge(float64(v.Uint())))
-		case reflect.Float64:
-			m.gauges.Set(name, common.Gauge(v.Float()))
-		}
+		m.storage.Set(name, reflect.ValueOf(ms).FieldByName(name))
 	}
-	// custom Gauges
-	m.gauges.Set("RandomValue", common.Gauge(rand.Float64()))
-	// custom Counters
-	m.counters.Set("PollCount", common.Counter(m.pollCount))
+	// custom
+	m.storage.Set("RandomValue", rand.Float64())
+	m.storage.Set("PollCount", m.pollCount)
 	m.pollCount++
 }
 
 func (m *metricsEngine) sendReport() {
-	sendFromStorage[common.Gauge](m.gauges)
-	sendFromStorage[common.Counter](m.counters)
-}
-
-func sendFromStorage[T common.Metric](storage common.Getter[T]) {
-	//	mt := metricType[T]()
 	c := http.Client{}
-	for _, name := range storage.GetNames() {
-		if val, ok := storage.Get(name); ok {
-			mt := typeOfValue(val)
-			url := fmt.Sprintf("http://%s/update/%s/%s/%s", addr, mt, name, val.String())
+	for _, name := range m.storage.GetNames() {
+		if val, ok := m.storage.Get(name); ok {
+			mt := typeOfMetric(val)
+			url := fmt.Sprintf("http://%s/update/%s/%s/%v", addr, mt, name, val)
 			r, err := http.NewRequest("POST", url, nil)
 			if err != nil {
 				log.Println(url, err)
@@ -132,7 +118,14 @@ func sendFromStorage[T common.Metric](storage common.Getter[T]) {
 	}
 }
 
-func typeOfValue(val any) string {
-	ss := strings.Split(reflect.ValueOf(val).Type().String(), ".")
-	return strings.ToLower(ss[len(ss)-1])
+func typeOfMetric(val any) string {
+	switch v := reflect.ValueOf(val); v.Kind() {
+	case reflect.Float64:
+		return server.TypeGauge
+	case reflect.Int64, reflect.Uint32:
+		return server.TypeCounter
+	default:
+		log.Println("client.typeOfMetric() illegal type", v.Kind().String())
+	}
+	return "unknown"
 }

@@ -6,6 +6,7 @@ import (
 	"time"
 )
 
+// main
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	c := client.New().Start(ctx)

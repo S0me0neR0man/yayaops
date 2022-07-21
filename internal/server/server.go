@@ -1,10 +1,12 @@
 package server
 
 import (
+	"fmt"
 	"github.com/S0me0neR0man/yayaops/internal/common"
 	"github.com/gorilla/mux"
 	"log"
 	"net/http"
+	"strconv"
 )
 
 const (
@@ -16,43 +18,50 @@ const (
 	OperUpdateMetric = "update"
 	OperGetMetric    = "value"
 
-	MuxVarOper   = "oper"
-	MuxVarType   = "type"
-	MuxVarMetric = "metric"
-	MuxVarValue  = "value"
+	MuxOper  = "oper"
+	MuxMType = "type"
+	MuxMName = "metric"
+	MuxValue = "value"
 )
 
 type Server struct {
-	gauges   *common.Storage[common.Gauge]
-	counters *common.Storage[common.Counter]
+	storage *common.Storage
 }
 
 func New() *Server {
 	s := Server{}
-	s.gauges = common.New[common.Gauge]()
-	s.counters = common.New[common.Counter]()
+	s.storage = common.NewStorage()
 	return &s
 }
 
+// Start set handlers and start listening
 func (s *Server) Start() error {
 	router := mux.NewRouter()
+	s.setHandlers(router)
 
-	// middleware
+	return http.ListenAndServe(addr, router)
+}
+
+func (s *Server) setHandlers(router *mux.Router) {
 	router.Use(s.logging)
 
-	router.HandleFunc("/{oper}/{type}/{metric}/{value}", s.metricsPostHandler).Methods(http.MethodPost)
-	router.HandleFunc("/{oper}/{type}/{metric}", s.metricsGetHandler).Methods(http.MethodGet)
+	router.HandleFunc("/{oper}/{type}/{metric}/{value}",
+		s.metricsPostHandler).
+		Methods(http.MethodPost)
+	// Headers("Content-Type", "application/text", "Content-Type", "text/plain")
+	router.HandleFunc("/{oper}/{type}/{metric}",
+		s.metricsGetHandler).
+		Methods(http.MethodGet)
+	//Headers("Content-Type", "application/text", "Content-Type", "text/plain")
 
 	router.HandleFunc("/{oper}/{type}/{metric}/{value}", s.notAcceptableHandler)
 	router.HandleFunc("/{oper}/{type}/{metric}", s.notAcceptableHandler)
-
-	return http.ListenAndServe(addr, router)
 }
 
 // logging middleware
 func (s *Server) logging(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Println(r.Method, r.RequestURI)
+		log.Println(r.Method, r.Header, r.RequestURI)
 		next.ServeHTTP(w, r)
 	})
 }
@@ -65,60 +74,38 @@ func (s *Server) notAcceptableHandler(w http.ResponseWriter, r *http.Request) {
 // metricsPostHandler
 func (s *Server) metricsPostHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	// checks
-	if status := checkURI(vars); status != http.StatusOK {
+
+	if cmd, status := newCommand(vars); status != http.StatusOK {
 		w.WriteHeader(status)
 		return
-	}
-	// Ok, just do it
-	if vars[MuxVarValue] == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	switch vars[MuxVarType] {
-	case TypeGauge:
-		if v, err := common.Gauge(0).From(vars[MuxVarValue]); err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		} else {
-			s.gauges.Set(vars[MuxVarMetric], v.(common.Gauge))
-		}
-	case TypeCounter:
-		if v, err := common.Counter(0).From(vars[MuxVarValue]); err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		} else {
-			if old, ok := s.counters.Get(vars[MuxVarMetric]); ok {
-				s.counters.Set(vars[MuxVarMetric], old+v.(common.Counter))
+	} else {
+		// save
+		switch cmd.MType {
+		case TypeGauge:
+			s.storage.Set(cmd.ID, *cmd.Value)
+		case TypeCounter:
+			if old, ok := s.storage.Get(cmd.ID); ok {
+				s.storage.Set(cmd.ID, old, *cmd.Delta)
 			} else {
-				s.counters.Set(vars[MuxVarMetric], v.(common.Counter))
+				s.storage.Set(cmd.ID, *cmd.Delta)
 			}
 		}
+		w.WriteHeader(http.StatusOK)
 	}
-
-	w.WriteHeader(http.StatusOK)
 }
 
 // metricsGetHandler
 func (s *Server) metricsGetHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	// checks
-	if status := checkURI(vars); status != http.StatusOK {
+
+	if cmd, status := newCommand(vars); status != http.StatusOK {
 		w.WriteHeader(status)
 		return
-	}
-	// Ok, just do it
-	switch vars[MuxVarType] {
-	case TypeGauge:
-		if v, ok := s.gauges.Get(vars[MuxVarMetric]); ok {
-			w.Write([]byte(v.String()))
-		} else {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-	case TypeCounter:
-		if v, ok := s.counters.Get(vars[MuxVarMetric]); ok {
-			w.Write([]byte(v.String()))
+	} else {
+		if v, ok := s.storage.Get(cmd.ID); ok {
+			if _, err := w.Write([]byte(fmt.Sprintf("%v", v))); err != nil {
+				log.Println(err)
+			}
 		} else {
 			w.WriteHeader(http.StatusNotFound)
 			return
@@ -126,28 +113,52 @@ func (s *Server) metricsGetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func checkURI(vars map[string]string) int {
+func newCommand(vars map[string]string) (*common.Command, int) {
+	c := &common.Command{CType: common.CTUnknown, Metrics: common.Metrics{Delta: new(int64), Value: new(float64)}}
+
 	for key, val := range vars {
 		switch key {
-		case MuxVarOper: // operation
+		case MuxOper: // operation
 			switch val {
 			case OperUpdateMetric:
+				c.CType = common.CTUpdate
 			case OperGetMetric:
+				c.CType = common.CTGet
 			default:
-				return http.StatusNotFound
+				return nil, http.StatusNotFound
 			}
-		case MuxVarType: // metric type
+		case MuxMType: // metric type
 			switch val {
 			case TypeGauge:
+				c.MType = TypeGauge
 			case TypeCounter:
+				c.MType = TypeCounter
 			default:
-				return http.StatusNotImplemented
+				return nil, http.StatusNotImplemented
 			}
-		case MuxVarMetric: // metric name
-			if val == "" {
-				return http.StatusNotFound
+		case MuxMName: // metric name
+			c.ID = val
+		}
+	}
+	if c.CType == common.CTUnknown || c.MType == "" || c.ID == "" {
+		return nil, http.StatusBadRequest
+	}
+
+	if c.CType == common.CTUpdate {
+		switch c.MType {
+		case TypeGauge:
+			if v, err := strconv.ParseFloat(vars[MuxValue], 64); err == nil {
+				*c.Value = v
+			} else {
+				return nil, http.StatusBadRequest
+			}
+		case TypeCounter:
+			if v, err := strconv.Atoi(vars[MuxValue]); err == nil {
+				*c.Delta = int64(v)
+			} else {
+				return nil, http.StatusBadRequest
 			}
 		}
 	}
-	return http.StatusOK
+	return c, http.StatusOK
 }
