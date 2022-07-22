@@ -37,7 +37,6 @@ func NewStorage() *Storage {
 func (s *Storage) Set(key string, values ...any) {
 	const pre = "Storage.Set()"
 	if len(values) == 0 {
-		log.Println(pre, "nothing to set")
 		return
 	}
 	// calc sum of values
