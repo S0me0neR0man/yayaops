@@ -6,9 +6,11 @@ import (
 	"time"
 )
 
+// main
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
-	client.New().Start(ctx)
+	c := client.New().Start(ctx)
 	time.Sleep(15 * time.Second)
 	cancel()
+	c.WaitShutdown()
 }
