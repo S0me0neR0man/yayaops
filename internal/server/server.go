@@ -155,7 +155,7 @@ func (s *Server) executeCommand(cmd *common.Command, w http.ResponseWriter) {
 		if v, ok := s.storage.Get(cmd.ID); ok {
 			var b []byte
 			var err error
-			if cmd.JsonResp {
+			if cmd.JSONResp {
 				b, err = json.Marshal(cmd)
 			} else {
 				b = []byte(fmt.Sprintf("%v", v))

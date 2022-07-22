@@ -55,5 +55,5 @@ type Metrics struct {
 type Command struct {
 	Metrics
 	CType    int  `json:"-"`
-	JsonResp bool `json:"-"`
+	JSONResp bool `json:"-"`
 }
