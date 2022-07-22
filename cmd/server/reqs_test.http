@@ -28,3 +28,19 @@ client.test("correct request", function() {
   client.assert(response.status !== 200, "Response status is 200");
 })
  %}
+
+### JSON
+POST http://localhost:8080/update/
+Content-Type: application/json
+
+{
+  "id":"GCSys",
+  "type":"counter",
+  "delta":100
+}
+
+> {%
+client.test("correct request", function() {
+  client.assert(response.status !== 200, "Response status is 200");
+})
+ %}
