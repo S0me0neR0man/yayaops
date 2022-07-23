@@ -67,7 +67,7 @@ func (s *Server) setHandlers(router *mux.Router) {
 // logging middleware
 func (s *Server) logging(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Println(r.Method, r.Header, r.RequestURI)
+		log.Println(r.Method, r.Header, r.RequestURI, r.Body)
 		next.ServeHTTP(w, r)
 	})
 }
@@ -117,6 +117,7 @@ func (s *Server) postJSONHandler(w http.ResponseWriter, r *http.Request) {
 		if err = json.Unmarshal(b, &m); err == nil {
 			cmd := common.Command{Metrics: m, CType: common.CTUpdate, JSONResp: true}
 			s.executeCommand(&cmd, w)
+			return
 		}
 	}
 	log.Println(err)
@@ -132,12 +133,16 @@ func (s *Server) getJSONHandler(w http.ResponseWriter, r *http.Request) {
 		if err = json.Unmarshal(b, &m); err == nil {
 			cmd := common.Command{Metrics: m, CType: common.CTGet, JSONResp: true}
 			s.executeCommand(&cmd, w)
+			return
 		}
 	}
 	log.Println(err)
 }
 
 func (s *Server) executeCommand(cmd *common.Command, w http.ResponseWriter) {
+	if cmd.JSONResp {
+		w.Header().Set("Content-Type", "application/json")
+	}
 	switch cmd.CType {
 	case common.CTUpdate: // *** update
 		switch cmd.MType {
@@ -149,6 +154,9 @@ func (s *Server) executeCommand(cmd *common.Command, w http.ResponseWriter) {
 			} else {
 				s.storage.Set(cmd.ID, *cmd.Delta)
 			}
+		default:
+			w.WriteHeader(http.StatusNotImplemented)
+			return
 		}
 		w.WriteHeader(http.StatusOK)
 	case common.CTGet: // *** get
@@ -156,7 +164,6 @@ func (s *Server) executeCommand(cmd *common.Command, w http.ResponseWriter) {
 			var b []byte
 			var err error
 			if cmd.JSONResp {
-				w.Header().Set("Content-Type", "application/json")
 				if cmd.MType == TypeGauge {
 					cmd.Value = new(float64)
 					*cmd.Value = v.(float64)

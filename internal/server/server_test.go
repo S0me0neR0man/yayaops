@@ -119,8 +119,63 @@ func TestHandlers(t *testing.T) {
 			contentType: "application/json",
 			body:        "{\"id\":\"GCSys\",\"type\":\"counter\"}",
 			want: want{
-				code: http.StatusOK,
-				body: "{\"id\":\"GCSys\",\"type\":\"counter\",\"delta\":2000}",
+				code:        http.StatusOK,
+				body:        "{\"id\":\"GCSys\",\"type\":\"counter\",\"delta\":2000}",
+				contentType: "application/json",
+			},
+		},
+		{
+			name:        "#12 JSON get unknown counter",
+			url:         "/value/",
+			method:      http.MethodGet,
+			contentType: "application/json",
+			body:        "{\"id\":\"NONE\",\"type\":\"counter\"}",
+			want: want{
+				code: http.StatusNotFound,
+			},
+		},
+		{
+			name:        "#13 JSON get unknown ID",
+			url:         "/value/",
+			method:      http.MethodGet,
+			contentType: "application/json",
+			body:        "{\"id\":\"NONE\",\"type\":\"gauge\"}",
+			want: want{
+				code: http.StatusNotFound,
+			},
+		},
+		{
+			name:   "#14 JSON post unknown type",
+			url:    "/update/",
+			method: http.MethodPost,
+
+			contentType: "application/json",
+			body:        "{\"id\":\"GCSys\",\"type\":\"NONE\",\"delta\":2000}",
+			want: want{
+				code: http.StatusNotImplemented,
+			},
+		},
+		{
+			name:        "#15 JSON post ",
+			url:         "/update/",
+			method:      http.MethodPost,
+			contentType: "application/json",
+			body:        "{\"id\":\"VAL\",\"type\":\"gauge\",\"value\":100.123}",
+			want: want{
+				code:        http.StatusOK,
+				contentType: "application/json",
+			},
+		},
+		{
+			name:        "#11 JSON get ",
+			url:         "/value/",
+			method:      http.MethodGet,
+			contentType: "application/json",
+			body:        "{\"id\":\"VAL\",\"type\":\"gauge\"}",
+			want: want{
+				code:        http.StatusOK,
+				body:        "{\"id\":\"VAL\",\"type\":\"gauge\",\"value\":100.123}",
+				contentType: "application/json",
 			},
 		},
 		// {"id":"GCSys","type":"counter","delta":3807944}
