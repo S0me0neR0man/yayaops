@@ -8,14 +8,10 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"strconv"
 )
 
 const (
 	addr = "127.0.0.1:8080"
-
-	TypeGauge   = "gauge"
-	TypeCounter = "counter"
 
 	OperUpdateMetric = "update"
 	OperGetMetric    = "value"
@@ -48,11 +44,11 @@ func (s *Server) Start() error {
 func (s *Server) setHandlers(router *mux.Router) {
 	router.Use(s.logging)
 
-	router.HandleFunc("/update/", s.postJSONHandler).
+	router.HandleFunc("/update/", s.updateJSONHandler).
 		Methods(http.MethodPost).
 		Headers("Content-Type", "application/json")
-	router.HandleFunc("/value/", s.getJSONHandler).
-		Methods(http.MethodGet).
+	router.HandleFunc("/value/", s.valueJSONHandler).
+		Methods(http.MethodPost).
 		Headers("Content-Type", "application/json")
 
 	router.HandleFunc("/{oper}/{type}/{metric}/{value}", s.postHandler).
@@ -82,7 +78,7 @@ func (s *Server) notAcceptableHandler(w http.ResponseWriter, r *http.Request) {
 func (s *Server) postHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 
-	if cmd, status := newCommand(vars); status == http.StatusOK {
+	if cmd, status := commandFromURL(vars); status == http.StatusOK {
 		s.executeCommand(cmd, w)
 	} else {
 		w.WriteHeader(status)
@@ -93,23 +89,15 @@ func (s *Server) postHandler(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 
-	if cmd, status := newCommand(vars); status != http.StatusOK {
-		w.WriteHeader(status)
-		return
+	if cmd, status := commandFromURL(vars); status == http.StatusOK {
+		s.executeCommand(cmd, w)
 	} else {
-		if v, ok := s.storage.Get(cmd.ID); ok {
-			if _, err := w.Write([]byte(fmt.Sprintf("%v", v))); err != nil {
-				log.Println(err)
-			}
-		} else {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
+		w.WriteHeader(status)
 	}
 }
 
-// postJSONHandler http.POST with 'Content-Type' == 'application/json'
-func (s *Server) postJSONHandler(w http.ResponseWriter, r *http.Request) {
+// updateJSONHandler POST update/
+func (s *Server) updateJSONHandler(w http.ResponseWriter, r *http.Request) {
 	var err error
 	var b []byte
 
@@ -124,15 +112,15 @@ func (s *Server) postJSONHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println(err)
 }
 
-// getJSONHandler http.GET with 'Content-Type' == 'application/json'
-func (s *Server) getJSONHandler(w http.ResponseWriter, r *http.Request) {
+// valueJSONHandler POST value/
+func (s *Server) valueJSONHandler(w http.ResponseWriter, r *http.Request) {
 	var err error
 	var b []byte
 
 	if b, err = ioutil.ReadAll(r.Body); err == nil {
 		m := common.Metrics{}
 		if err = json.Unmarshal(b, &m); err == nil {
-			cmd := common.Command{Metrics: m, CType: common.CTGet, JSONResp: true}
+			cmd := common.Command{Metrics: m, CType: common.CTValue, JSONResp: true}
 			s.executeCommand(&cmd, w)
 			return
 		}
@@ -145,11 +133,11 @@ func (s *Server) executeCommand(cmd *common.Command, w http.ResponseWriter) {
 		w.Header().Set("Content-Type", "application/json")
 	}
 	switch cmd.CType {
-	case common.CTUpdate: // *** update
+	case common.CTUpdate:
 		switch cmd.MType {
-		case TypeGauge:
+		case common.MTypeGauge:
 			s.storage.Set(cmd.ID, *cmd.Value)
-		case TypeCounter:
+		case common.MTypeCounter:
 			if old, ok := s.storage.Get(cmd.ID); ok {
 				s.storage.Set(cmd.ID, old, *cmd.Delta)
 			} else {
@@ -160,18 +148,12 @@ func (s *Server) executeCommand(cmd *common.Command, w http.ResponseWriter) {
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-	case common.CTGet: // *** get
+	case common.CTValue:
 		if v, ok := s.storage.Get(cmd.ID); ok {
 			var b []byte
 			var err error
 			if cmd.JSONResp {
-				if cmd.MType == TypeGauge {
-					cmd.Value = new(float64)
-					*cmd.Value = v.(float64)
-				} else {
-					cmd.Delta = new(int64)
-					*cmd.Delta = v.(int64)
-				}
+				cmd.SetAnyValue(v)
 				b, err = json.Marshal(cmd)
 			} else {
 				b = []byte(fmt.Sprintf("%v", v))
@@ -189,53 +171,40 @@ func (s *Server) executeCommand(cmd *common.Command, w http.ResponseWriter) {
 	}
 }
 
-func newCommand(vars map[string]string) (*common.Command, int) {
+// commandFromURL sprint 1 compatibility with sprint 2
+func commandFromURL(vars map[string]string) (*common.Command, int) {
 	c := &common.Command{CType: common.CTUnknown}
 
 	for key, val := range vars {
 		switch key {
-		case MuxOper: // operation
+		case MuxOper:
 			switch val {
 			case OperUpdateMetric:
 				c.CType = common.CTUpdate
 			case OperGetMetric:
-				c.CType = common.CTGet
+				c.CType = common.CTValue
 			default:
 				return nil, http.StatusNotFound
 			}
-		case MuxMType: // metric type
+		case MuxMType:
 			switch val {
-			case TypeGauge:
-				c.MType = TypeGauge
-			case TypeCounter:
-				c.MType = TypeCounter
+			case common.MTypeGauge:
+				c.MType = common.MTypeGauge
+			case common.MTypeCounter:
+				c.MType = common.MTypeCounter
 			default:
 				return nil, http.StatusNotImplemented
 			}
-		case MuxMName: // metric name
+		case MuxMName:
 			c.ID = val
 		}
 	}
 	if c.CType == common.CTUnknown || c.MType == "" || c.ID == "" {
 		return nil, http.StatusBadRequest
 	}
-
 	if c.CType == common.CTUpdate {
-		switch c.MType {
-		case TypeGauge:
-			if v, err := strconv.ParseFloat(vars[MuxValue], 64); err == nil {
-				c.Value = new(float64)
-				*c.Value = v
-			} else {
-				return nil, http.StatusBadRequest
-			}
-		case TypeCounter:
-			if v, err := strconv.Atoi(vars[MuxValue]); err == nil {
-				c.Delta = new(int64)
-				*c.Delta = int64(v)
-			} else {
-				return nil, http.StatusBadRequest
-			}
+		if err := c.SetStrValue(vars[MuxValue]); err != nil {
+			return nil, http.StatusBadRequest
 		}
 	}
 	return c, http.StatusOK

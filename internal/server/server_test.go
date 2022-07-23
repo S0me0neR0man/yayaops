@@ -92,6 +92,7 @@ func TestHandlers(t *testing.T) {
 				body: "100.3567",
 			},
 		},
+		// ------ INCREMENT 4
 		{
 			name:        "#9 JSON post ",
 			url:         "/update/",
@@ -115,7 +116,7 @@ func TestHandlers(t *testing.T) {
 		{
 			name:        "#11 JSON get ",
 			url:         "/value/",
-			method:      http.MethodGet,
+			method:      http.MethodPost,
 			contentType: "application/json",
 			body:        "{\"id\":\"GCSys\",\"type\":\"counter\"}",
 			want: want{
@@ -127,7 +128,7 @@ func TestHandlers(t *testing.T) {
 		{
 			name:        "#12 JSON get unknown counter",
 			url:         "/value/",
-			method:      http.MethodGet,
+			method:      http.MethodPost,
 			contentType: "application/json",
 			body:        "{\"id\":\"NONE\",\"type\":\"counter\"}",
 			want: want{
@@ -137,7 +138,7 @@ func TestHandlers(t *testing.T) {
 		{
 			name:        "#13 JSON get unknown ID",
 			url:         "/value/",
-			method:      http.MethodGet,
+			method:      http.MethodPost,
 			contentType: "application/json",
 			body:        "{\"id\":\"NONE\",\"type\":\"gauge\"}",
 			want: want{
@@ -169,7 +170,7 @@ func TestHandlers(t *testing.T) {
 		{
 			name:        "#16 JSON get ",
 			url:         "/value/",
-			method:      http.MethodGet,
+			method:      http.MethodPost,
 			contentType: "application/json",
 			body:        "{\"id\":\"VAL\",\"type\":\"gauge\"}",
 			want: want{
@@ -192,7 +193,7 @@ func TestHandlers(t *testing.T) {
 		{
 			name:        "#18 wrongJSON get ",
 			url:         "/value/",
-			method:      http.MethodGet,
+			method:      http.MethodPost,
 			contentType: "application/json",
 			body:        "{\"1id\":\"1VAL\",\"11type\":\"11gauge\"}",
 			want: want{

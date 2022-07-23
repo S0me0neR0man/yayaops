@@ -1,9 +1,16 @@
 package common
 
+import (
+	"strconv"
+)
+
 const (
 	CTUnknown = iota
 	CTUpdate
-	CTGet
+	CTValue
+
+	MTypeGauge   = "gauge"
+	MTypeCounter = "counter"
 )
 
 var RuntimeMNames = []string{
@@ -50,6 +57,47 @@ type Metrics struct {
 	MType string   `json:"type"`            // параметр, принимающий значение gauge или counter
 	Delta *int64   `json:"delta,omitempty"` // значение метрики в случае передачи counter
 	Value *float64 `json:"value,omitempty"` // значение метрики в случае передачи gauge
+}
+
+// SetStrValue MType must be filled before the call
+func (m *Metrics) SetStrValue(value string) error {
+	switch m.MType {
+	case MTypeGauge:
+		if v, err := strconv.ParseFloat(value, 64); err == nil {
+			if m.Value == nil {
+				m.Value = new(float64)
+			}
+			*m.Value = v
+		} else {
+			return err
+		}
+	case MTypeCounter:
+		if v, err := strconv.Atoi(value); err == nil {
+			if m.Delta == nil {
+				m.Delta = new(int64)
+			}
+			*m.Delta = int64(v)
+		} else {
+			return err
+		}
+	}
+	return nil
+}
+
+// SetAnyValue MType must be filled before the call
+// value must be int64 or float64
+func (m *Metrics) SetAnyValue(value any) {
+	if m.MType == MTypeGauge {
+		if m.Value == nil {
+			m.Value = new(float64)
+		}
+		*m.Value = value.(float64)
+	} else {
+		if m.Delta == nil {
+			m.Delta = new(int64)
+		}
+		*m.Delta = value.(int64)
+	}
 }
 
 type Command struct {
