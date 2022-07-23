@@ -3,14 +3,13 @@ package main
 import (
 	"context"
 	"github.com/S0me0neR0man/yayaops/internal/client"
-	"time"
 )
 
 // main
 func main() {
-	ctx, cancel := context.WithCancel(context.Background())
-	c := client.New().Start(ctx)
-	time.Sleep(15 * time.Second)
-	cancel()
-	c.WaitShutdown()
+	ctx, _ /*cancel*/ := context.WithCancel(context.Background())
+	_ = client.New().Start(ctx)
+	//time.Sleep(5 * time.Second)
+	//cancel()
+	//c.WaitShutdown()
 }
