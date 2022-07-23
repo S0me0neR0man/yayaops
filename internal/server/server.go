@@ -155,8 +155,8 @@ func (s *Server) executeCommand(cmd *common.Command, w http.ResponseWriter) {
 		if v, ok := s.storage.Get(cmd.ID); ok {
 			var b []byte
 			var err error
-			// todo: set Metrics.Delta
 			if cmd.JSONResp {
+				w.Header().Set("Content-Type", "application/json")
 				if cmd.MType == TypeGauge {
 					cmd.Value = new(float64)
 					*cmd.Value = v.(float64)
