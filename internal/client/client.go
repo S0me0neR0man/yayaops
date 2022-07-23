@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/S0me0neR0man/yayaops/internal/common"
-	"github.com/S0me0neR0man/yayaops/internal/server"
 	"github.com/go-resty/resty/v2"
 	"log"
 	"math/rand"
@@ -109,24 +108,13 @@ func (m *metricsEngine) sendReport() {
 	c := resty.New()
 	for _, name := range m.storage.GetNames() {
 		if val, ok := m.storage.Get(name); ok {
-
-			// fill common.Metrics
 			m := common.Metrics{}
 			m.MType = typeOfMetric(val)
 			m.ID = name
-			if m.MType == server.TypeGauge {
-				m.Value = new(float64)
-				*m.Value = val.(float64)
-			} else {
-				m.Delta = new(int64)
-				*m.Delta = val.(int64)
-			}
+			m.SetAnyValue(val)
 
-			// serialize, url
 			b, _ := json.Marshal(m)
 			url := fmt.Sprintf("http://%s/update/", addr)
-
-			// send
 			resp, err := c.R().SetHeader("Content-Type", "application/json").SetBody(b).Post(url)
 			if err != nil {
 				log.Println(resp, err)
@@ -138,9 +126,9 @@ func (m *metricsEngine) sendReport() {
 func typeOfMetric(val any) string {
 	switch v := reflect.ValueOf(val); v.Kind() {
 	case reflect.Float64:
-		return server.TypeGauge
+		return common.MTypeGauge
 	case reflect.Int64:
-		return server.TypeCounter
+		return common.MTypeCounter
 	default:
 		log.Fatal("client.typeOfMetric() unknown metric type:", v.Kind().String())
 	}
