@@ -2,14 +2,15 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/S0me0neR0man/yayaops/internal/common"
+	"github.com/S0me0neR0man/yayaops/internal/server"
+	"github.com/go-resty/resty/v2"
 	"log"
 	"math/rand"
-	"net/http"
 	"reflect"
 	"runtime"
-	"strings"
 	"sync"
 	"time"
 )
@@ -21,16 +22,14 @@ const (
 )
 
 type metricsEngine struct {
-	gauges    *common.Storage[common.Gauge]
-	counters  *common.Storage[common.Counter]
+	storage   *common.Storage
 	pollCount int64
 	wg        sync.WaitGroup
 }
 
 func New() *metricsEngine {
 	e := metricsEngine{}
-	e.gauges = common.New[common.Gauge]()
-	e.counters = common.New[common.Counter]()
+	e.storage = common.NewStorage()
 	return &e
 }
 
@@ -59,9 +58,7 @@ func (m *metricsEngine) pollJob(ctx context.Context) {
 		select {
 		case <-ticker.C:
 			m.pollMetrics()
-			log.Println("### pollJob", m.gauges, m.counters)
 		case <-ctx.Done():
-			log.Println("--- exit POLL")
 			ticker.Stop()
 			cancelReport()
 			m.wg.Done()
@@ -76,10 +73,8 @@ func (m *metricsEngine) reportJob(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			log.Println("@@@ reportJob")
 			m.sendReport()
 		case <-ctx.Done():
-			log.Println("--- exit reportJob")
 			ticker.Stop()
 			m.wg.Done()
 			return
@@ -88,51 +83,66 @@ func (m *metricsEngine) reportJob(ctx context.Context) {
 }
 
 func (m *metricsEngine) pollMetrics() {
-	// runtime Gauges
+	// runtime metrics
 	var ms runtime.MemStats
 	runtime.ReadMemStats(&ms)
 	for _, name := range common.RuntimeMNames {
-		switch v := reflect.ValueOf(ms).FieldByName(name); v.Kind() {
-		case reflect.Uint, reflect.Uint32, reflect.Uint64:
-			m.gauges.Set(name, common.Gauge(float64(v.Uint())))
+		v := reflect.ValueOf(ms).FieldByName(name)
+		switch v.Kind() {
+		case reflect.Int64:
+			m.storage.Set(name, v.Int())
+		case reflect.Uint64, reflect.Uint32:
+			m.storage.Set(name, int64(v.Uint()))
 		case reflect.Float64:
-			m.gauges.Set(name, common.Gauge(v.Float()))
+			m.storage.Set(name, v.Float())
+		default:
+			log.Println("pollMetrics", v.Kind())
 		}
 	}
-	// custom Gauges
-	m.gauges.Set("RandomValue", common.Gauge(rand.Float64()))
-	// custom Counters
-	m.counters.Set("PollCount", common.Counter(m.pollCount))
+	// custom
+	m.storage.Set("RandomValue", rand.Float64())
+	m.storage.Set("PollCount", m.pollCount)
 	m.pollCount++
 }
 
 func (m *metricsEngine) sendReport() {
-	sendFromStorage[common.Gauge](m.gauges)
-	sendFromStorage[common.Counter](m.counters)
-}
+	c := resty.New()
+	for _, name := range m.storage.GetNames() {
+		if val, ok := m.storage.Get(name); ok {
 
-func sendFromStorage[T common.Metric](storage common.Getter[T]) {
-	//	mt := metricType[T]()
-	c := http.Client{}
-	for _, name := range storage.GetNames() {
-		if val, ok := storage.Get(name); ok {
-			mt := typeOfValue(val)
-			url := fmt.Sprintf("http://%s/update/%s/%s/%s", addr, mt, name, val.String())
-			r, err := http.NewRequest("POST", url, nil)
+			// fill common.Metrics
+			m := common.Metrics{}
+			m.MType = typeOfMetric(val)
+			m.ID = name
+			if m.MType == server.TypeGauge {
+				m.Value = new(float64)
+				*m.Value = val.(float64)
+			} else {
+				m.Delta = new(int64)
+				*m.Delta = val.(int64)
+			}
+
+			// serialize, url
+			b, _ := json.Marshal(m)
+			url := fmt.Sprintf("http://%s/update/", addr)
+
+			// send
+			resp, err := c.R().SetHeader("Content-Type", "application/json").SetBody(b).Post(url)
 			if err != nil {
-				log.Println(url, err)
-				continue
+				log.Println(resp, err)
 			}
-			if resp, err := c.Do(r); err != nil {
-				log.Println(url, resp, err)
-			}
-		} else {
-			log.Println("sendGauges error: metric", name, "not found")
 		}
 	}
 }
 
-func typeOfValue(val any) string {
-	ss := strings.Split(reflect.ValueOf(val).Type().String(), ".")
-	return strings.ToLower(ss[len(ss)-1])
+func typeOfMetric(val any) string {
+	switch v := reflect.ValueOf(val); v.Kind() {
+	case reflect.Float64:
+		return server.TypeGauge
+	case reflect.Int64:
+		return server.TypeCounter
+	default:
+		log.Fatal("client.typeOfMetric() unknown metric type:", v.Kind().String())
+	}
+	return "unknown"
 }

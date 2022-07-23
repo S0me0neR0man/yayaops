@@ -1,8 +1,11 @@
 package server
 
 import (
+	"bytes"
 	"github.com/gorilla/mux"
-	"io"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,133 +14,149 @@ import (
 func TestHandlers(t *testing.T) {
 	// определяем структуру теста
 	type want struct {
-		url      string
-		method   string
-		code     int
-		response string
+		code        int
+		body        string
+		contentType string
 	}
 	// создаём массив тестов: имя и желаемый результат
-	tests := []struct {
-		name string
-		want want
+	var tests = []struct {
+		name        string
+		url         string
+		method      string
+		contentType string
+		body        string
+		want        want
 	}{
 		{
-			name: "#0 set ",
+			name:   "#1 positive",
+			url:    "/update/counter/Alloc/124",
+			method: http.MethodPost,
 			want: want{
-				url:    "/update/gauge/val/100.3567",
-				method: http.MethodPost,
-				code:   http.StatusOK,
+				code: http.StatusOK,
 			},
 		},
 		{
-			name: "#1 positive",
+			name:   "#2 wrong method",
+			url:    "/update/gauge/Alloc/124.6",
+			method: http.MethodDelete,
 			want: want{
-				url:    "/update/counter/Alloc/124",
-				method: http.MethodPost,
-				code:   http.StatusOK,
+				code: http.StatusNotAcceptable,
 			},
 		},
 		{
-			name: "#2 wrong method",
+			name:   "#3 invalid body",
+			url:    "/update/gauge/BUGAlloc/none",
+			method: http.MethodPost,
 			want: want{
-				url:    "/update/gauge/Alloc/124.6",
-				method: http.MethodDelete,
-				code:   http.StatusNotAcceptable,
+				code: http.StatusBadRequest,
 			},
 		},
 		{
-			name: "#3 invalid response",
+			name:   "#4 without id",
+			url:    "/update/counter/",
+			method: http.MethodPost,
 			want: want{
-				url:    "/update/gauge/BUGAlloc/none",
-				method: http.MethodPost,
-				code:   http.StatusBadRequest,
+				code: http.StatusNotFound,
 			},
 		},
 		{
-			name: "#4 without id",
+			name:   "#5 without id",
+			url:    "/update/gauge/",
+			method: http.MethodPost,
 			want: want{
-				url:    "/update/counter/",
-				method: http.MethodPost,
-				code:   http.StatusNotFound,
+				code: http.StatusNotFound,
 			},
 		},
 		{
-			name: "#5 without id",
+			name:   "#6 wrong oper",
+			url:    "/update/unknown/testCounter/100",
+			method: http.MethodPost,
 			want: want{
-				url:    "/update/gauge/",
-				method: http.MethodPost,
-				code:   http.StatusNotFound,
+				code: http.StatusNotImplemented,
 			},
 		},
 		{
-			name: "#6 wrong oper",
+			name:   "#7 set ",
+			url:    "/update/gauge/val/100.3567",
+			method: http.MethodPost,
 			want: want{
-				url:    "/update/unknown/testCounter/100",
-				method: http.MethodPost,
-				code:   http.StatusNotImplemented,
+				code: http.StatusOK,
 			},
 		},
 		{
-			name: "#7 set ",
+			name:   "#8 get after set ",
+			url:    "/value/gauge/val",
+			method: http.MethodGet,
 			want: want{
-				url:    "/update/gauge/val/100.3567",
-				method: http.MethodPost,
-				code:   http.StatusOK,
+				code: http.StatusOK,
+				body: "100.3567",
 			},
 		},
 		{
-			name: "#8 get after set ",
+			name:        "#9 JSON post ",
+			url:         "/update/",
+			method:      http.MethodPost,
+			contentType: "application/json",
+			body:        "{\"id\":\"GCSys\",\"type\":\"counter\",\"delta\":1000}",
 			want: want{
-				url:      "/value/gauge/val",
-				method:   http.MethodGet,
-				code:     http.StatusOK,
-				response: "100.3567",
+				code: http.StatusOK,
 			},
 		},
+		{
+			name:        "#10 JSON post ",
+			url:         "/update/",
+			method:      http.MethodPost,
+			contentType: "application/json",
+			body:        "{\"id\":\"GCSys\",\"type\":\"counter\",\"delta\":1000}",
+			want: want{
+				code: http.StatusOK,
+			},
+		},
+		{
+			name:        "#11 JSON get ",
+			url:         "/value/",
+			method:      http.MethodGet,
+			contentType: "application/json",
+			body:        "{\"id\":\"GCSys\",\"type\":\"counter\"}",
+			want: want{
+				code: http.StatusOK,
+				body: "{\"id\":\"GCSys\",\"type\":\"counter\",\"delta\":2000}",
+			},
+		},
+		// {"id":"GCSys","type":"counter","delta":3807944}
 	}
-
 	s := New()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			request := httptest.NewRequest(tt.want.method, tt.want.url, nil)
+
+			request := httptest.NewRequest(tt.method, tt.url, bytes.NewBufferString(tt.body))
+			if tt.contentType != "" {
+				request.Header.Set("Content-Type", tt.contentType)
+			}
 
 			w := httptest.NewRecorder()
 
 			router := mux.NewRouter()
-			router.HandleFunc("/{oper}/{type}/{metric}/{value}", s.metricsPostHandler).Methods(http.MethodPost)
-			router.HandleFunc("/{oper}/{type}/{metric}", s.metricsGetHandler).Methods(http.MethodGet)
-
-			router.HandleFunc("/{oper}/{type}/{metric}/{value}", s.notAcceptableHandler)
-			router.HandleFunc("/{oper}/{type}/{metric}", s.notAcceptableHandler)
-
+			s.setHandlers(router)
 			router.ServeHTTP(w, request)
+			result := w.Result()
 
-			//h := http.HandlerFunc(s.metricsPostHandler)
-			//h.ServeHTTP(w, request)
-			//res := w.Result()
-
-			if w.Code != tt.want.code {
-				t.Errorf("Expected status code %d, got %d", tt.want.code, w.Code)
+			assert.Equal(t, tt.want.code, result.StatusCode)
+			if tt.want.contentType != "" {
+				assert.Equal(t, tt.want.contentType, result.Header.Get("Content-Type"))
 			}
+			value, err := ioutil.ReadAll(result.Body)
+			require.NoError(t, err)
+			err = result.Body.Close()
+			require.NoError(t, err)
 
-			res := w.Result()
-			defer res.Body.Close()
-			resBody, err := io.ReadAll(res.Body)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if tt.want.method == http.MethodGet {
-				if string(resBody) != tt.want.response {
-					t.Errorf("Expected body %s, got %s", tt.want.response, w.Body.String())
-				}
-			}
+			//var user User
+			//err = json.Unmarshal(value, &user)
+			//require.NoError(t, err)
 
-			// заголовок ответа
-			/*
-				if res.Header.Get("Content-Type") != tt.want.contentType {
-					t.Errorf("Expected Content-Type %s, got %s", tt.want.contentType, res.Header.Get("Content-Type"))
-				}
-			*/
+			if tt.want.body != "" {
+				assert.Equal(t, tt.want.body, string(value))
+			}
 		})
 	}
 }
