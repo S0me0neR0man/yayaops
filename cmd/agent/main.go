@@ -10,7 +10,7 @@ import (
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	c := client.New().Start(ctx)
-	time.Sleep(20 * time.Minute)
+	time.Sleep(40 * time.Minute)
 	cancel()
 	c.WaitShutdown()
 }
