@@ -102,6 +102,7 @@ func (s *Server) updateJSONHandler(w http.ResponseWriter, r *http.Request) {
 	var b []byte
 
 	if b, err = ioutil.ReadAll(r.Body); err == nil {
+		log.Println(string(b))
 		m := common.Metrics{}
 		if err = json.Unmarshal(b, &m); err == nil {
 			cmd := common.Command{Metrics: m, CType: common.CTUpdate, JSONResp: true}
@@ -118,6 +119,7 @@ func (s *Server) valueJSONHandler(w http.ResponseWriter, r *http.Request) {
 	var b []byte
 
 	if b, err = ioutil.ReadAll(r.Body); err == nil {
+		log.Println(string(b))
 		m := common.Metrics{}
 		if err = json.Unmarshal(b, &m); err == nil {
 			cmd := common.Command{Metrics: m, CType: common.CTValue, JSONResp: true}
