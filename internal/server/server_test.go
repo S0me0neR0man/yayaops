@@ -40,7 +40,7 @@ func TestHandlers(t *testing.T) {
 			url:    "/update/gauge/Alloc/124.6",
 			method: http.MethodDelete,
 			want: want{
-				code: http.StatusNotAcceptable,
+				code: http.StatusNotFound,
 			},
 		},
 		{
@@ -167,7 +167,7 @@ func TestHandlers(t *testing.T) {
 			},
 		},
 		{
-			name:        "#11 JSON get ",
+			name:        "#16 JSON get ",
 			url:         "/value/",
 			method:      http.MethodGet,
 			contentType: "application/json",
@@ -175,6 +175,28 @@ func TestHandlers(t *testing.T) {
 			want: want{
 				code:        http.StatusOK,
 				body:        "{\"id\":\"VAL\",\"type\":\"gauge\",\"value\":100.123}",
+				contentType: "application/json",
+			},
+		},
+		{
+			name:        "#17 wrong JSON post ",
+			url:         "/update/",
+			method:      http.MethodPost,
+			contentType: "application/json",
+			body:        "{\"ud\":100,\"type1\":\"1gauge\"}",
+			want: want{
+				code:        http.StatusNotImplemented,
+				contentType: "application/json",
+			},
+		},
+		{
+			name:        "#18 wrongJSON get ",
+			url:         "/value/",
+			method:      http.MethodGet,
+			contentType: "application/json",
+			body:        "{\"1id\":\"1VAL\",\"11type\":\"11gauge\"}",
+			want: want{
+				code:        http.StatusNotFound,
 				contentType: "application/json",
 			},
 		},

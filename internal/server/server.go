@@ -74,7 +74,8 @@ func (s *Server) logging(next http.Handler) http.Handler {
 
 // notAcceptableHandler the handler of incorrect requests
 func (s *Server) notAcceptableHandler(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "Not Allowed", http.StatusNotAcceptable)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusNotFound)
 }
 
 // postHandler http.POST without 'Content-Type'
