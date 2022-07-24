@@ -1,7 +1,7 @@
 package common
 
 import (
-	"errors"
+	"fmt"
 	"reflect"
 	"strconv"
 )
@@ -90,16 +90,25 @@ func (m *Metrics) SetStrValue(value string) error {
 // value must be int64 or float64
 func (m *Metrics) SetAnyValue(value any) error {
 	v := reflect.ValueOf(value)
-	if m.MType == MTypeGauge {
-		if v.CanFloat() {
+	switch m.MType {
+	case MTypeGauge:
+		switch v.Kind() {
+		case reflect.Float64:
 			if m.Value == nil {
 				m.Value = new(float64)
 			}
 			*m.Value = value.(float64)
 			return nil
+		case reflect.Int64:
+			if m.Value == nil {
+				m.Value = new(float64)
+			}
+			*m.Value = float64(value.(int64))
+			return nil
 		}
-	} else {
-		if v.CanInt() {
+	case MTypeCounter:
+		switch v.Kind() {
+		case reflect.Int64:
 			if m.Delta == nil {
 				m.Delta = new(int64)
 			}
@@ -107,7 +116,7 @@ func (m *Metrics) SetAnyValue(value any) error {
 			return nil
 		}
 	}
-	return errors.New("SetAnyValue: wrong  type")
+	return fmt.Errorf("SetAnyValue: MType=%s ID=%s wrong type %v", m.MType, m.ID, v.Kind())
 }
 
 type Command struct {
