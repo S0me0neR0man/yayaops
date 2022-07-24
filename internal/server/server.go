@@ -63,7 +63,7 @@ func (s *Server) setHandlers(router *mux.Router) {
 // logging middleware
 func (s *Server) logging(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Println(r.Method, r.Header, r.RequestURI, r.Body)
+		log.Println(r.Method, r.Header, r.RequestURI)
 		next.ServeHTTP(w, r)
 	})
 }
