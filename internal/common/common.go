@@ -1,6 +1,8 @@
 package common
 
 import (
+	"errors"
+	"reflect"
 	"strconv"
 )
 
@@ -86,18 +88,25 @@ func (m *Metrics) SetStrValue(value string) error {
 
 // SetAnyValue MType must be filled before the call
 // value must be int64 or float64
-func (m *Metrics) SetAnyValue(value any) {
+func (m *Metrics) SetAnyValue(value any) error {
+	v := reflect.ValueOf(value)
 	if m.MType == MTypeGauge {
-		if m.Value == nil {
-			m.Value = new(float64)
+		if v.CanFloat() {
+			if m.Value == nil {
+				m.Value = new(float64)
+			}
+			*m.Value = v.Float()
+			return nil
 		}
-		*m.Value = value.(float64)
 	} else {
-		if m.Delta == nil {
-			m.Delta = new(int64)
+		if v.CanInt() {
+			if m.Delta == nil {
+				m.Delta = new(int64)
+			}
+			*m.Delta = v.Int()
 		}
-		*m.Delta = value.(int64)
 	}
+	return errors.New("SetAnyValue: wrong  type")
 }
 
 type Command struct {
