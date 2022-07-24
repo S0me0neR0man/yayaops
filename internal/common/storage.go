@@ -1,7 +1,8 @@
 package common
 
 import (
-	"log"
+	"errors"
+	"fmt"
 	"reflect"
 	"sync"
 )
@@ -34,10 +35,10 @@ func NewStorage() *Storage {
 }
 
 // Set implementation the Setter
-func (s *Storage) Set(key string, values ...any) {
+func (s *Storage) Set(key string, values ...any) error {
 	const pre = "Storage.Set()"
 	if len(values) == 0 {
-		return
+		return errors.New(pre + " nothing to set")
 	}
 	// calc sum of values
 	sum := values[0]
@@ -45,7 +46,7 @@ func (s *Storage) Set(key string, values ...any) {
 	for i := 1; i < len(values); i++ {
 		v := reflect.ValueOf(values[i])
 		if sumReflectValue != v.Kind() {
-			log.Fatal(pre, "values of different types")
+			return errors.New(pre + " values of different types")
 		}
 		switch sumReflectValue {
 		case reflect.Float64:
@@ -53,12 +54,13 @@ func (s *Storage) Set(key string, values ...any) {
 		case reflect.Int64:
 			sum = sum.(int64) + v.Int()
 		default:
-			log.Fatal(pre, v.Kind(), "not implemented")
+			return fmt.Errorf("%s %v not implemented", pre, v.Kind())
 		}
 	}
 	s.Lock()
 	s.data[key] = sum
 	s.Unlock()
+	return nil
 }
 
 // Get implementation the Getter

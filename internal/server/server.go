@@ -138,12 +138,23 @@ func (s *Server) executeCommand(cmd *common.Command, w http.ResponseWriter) {
 	case common.CTUpdate:
 		switch cmd.MType {
 		case common.MTypeGauge:
-			s.storage.Set(cmd.ID, *cmd.Value)
+			if cmd.Value == nil {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			_ = s.storage.Set(cmd.ID, *cmd.Value)
 		case common.MTypeCounter:
+			if cmd.Delta == nil {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
 			if old, ok := s.storage.Get(cmd.ID); ok {
-				s.storage.Set(cmd.ID, old, *cmd.Delta)
+				if err := s.storage.Set(cmd.ID, old, *cmd.Delta); err != nil {
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
 			} else {
-				s.storage.Set(cmd.ID, *cmd.Delta)
+				_ = s.storage.Set(cmd.ID, *cmd.Delta)
 			}
 		default:
 			w.WriteHeader(http.StatusNotImplemented)

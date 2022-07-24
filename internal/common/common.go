@@ -95,7 +95,7 @@ func (m *Metrics) SetAnyValue(value any) error {
 			if m.Value == nil {
 				m.Value = new(float64)
 			}
-			*m.Value = v.Float()
+			*m.Value = value.(float64)
 			return nil
 		}
 	} else {
@@ -103,7 +103,7 @@ func (m *Metrics) SetAnyValue(value any) error {
 			if m.Delta == nil {
 				m.Delta = new(int64)
 			}
-			*m.Delta = v.Int()
+			*m.Delta = value.(int64)
 			return nil
 		}
 	}
