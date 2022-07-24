@@ -8,11 +8,10 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 )
 
 const (
-	addr = "127.0.0.1:8080"
-
 	OperUpdateMetric = "update"
 	OperGetMetric    = "value"
 
@@ -21,6 +20,19 @@ const (
 	MuxMName = "metric"
 	MuxValue = "value"
 )
+
+type config struct {
+	addr string
+}
+
+var cfg config
+
+func init() {
+	if cfg.addr = os.Getenv("ADDRESS"); cfg.addr == "" {
+		cfg.addr = "127.0.0.1:8080"
+	}
+	log.Printf("Server init %+v", cfg)
+}
 
 type Server struct {
 	storage *common.Storage
@@ -37,7 +49,7 @@ func (s *Server) Start() error {
 	router := mux.NewRouter()
 	s.setHandlers(router)
 
-	return http.ListenAndServe(addr, router)
+	return http.ListenAndServe(cfg.addr, router)
 }
 
 // setHandlers configure gorilla/mux router
@@ -120,12 +132,10 @@ func (s *Server) valueJSONHandler(w http.ResponseWriter, r *http.Request) {
 	var err error
 	var b []byte
 
-	log.Println("valueJSONHandler")
 	if b, err = ioutil.ReadAll(r.Body); err == nil {
 		log.Println(string(b))
 		m := common.Metrics{}
 		if err = json.Unmarshal(b, &m); err == nil {
-			log.Printf("%v", m)
 			cmd := common.Command{Metrics: m, CType: common.CTValue, JSONResp: true}
 			s.executeCommand(&cmd, w)
 			return
@@ -149,7 +159,6 @@ func (s *Server) executeCommand(cmd *common.Command, w http.ResponseWriter) {
 				return
 			}
 			_ = s.storage.Set(cmd.ID, *cmd.Value)
-			log.Println("exec_update gauge after set")
 		case common.MTypeCounter:
 			if cmd.Delta == nil {
 				w.WriteHeader(http.StatusBadRequest)
@@ -163,7 +172,6 @@ func (s *Server) executeCommand(cmd *common.Command, w http.ResponseWriter) {
 			} else {
 				_ = s.storage.Set(cmd.ID, *cmd.Delta)
 			}
-			log.Println("exec_update counter after set")
 		default:
 			w.WriteHeader(http.StatusNotImplemented)
 			return
@@ -179,12 +187,9 @@ func (s *Server) executeCommand(cmd *common.Command, w http.ResponseWriter) {
 					return
 				}
 				b, err = json.Marshal(cmd)
-				log.Println("exec_value json", string(b))
 			} else {
 				b = []byte(fmt.Sprintf("%v", v))
-				log.Println("exec_value ", string(b))
 			}
-			log.Println(string(b))
 			if err == nil {
 				_, err = w.Write(b)
 			}

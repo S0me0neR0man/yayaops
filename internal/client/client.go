@@ -8,17 +8,41 @@ import (
 	"github.com/go-resty/resty/v2"
 	"log"
 	"math/rand"
+	"os"
 	"reflect"
 	"runtime"
+	"strconv"
 	"sync"
 	"time"
 )
 
-const (
-	pollInterval   = 2 * time.Second
-	reportInterval = 10 * time.Second
-	addr           = "127.0.0.1:8080"
-)
+type config struct {
+	addr           string
+	pollInterval   time.Duration
+	reportInterval time.Duration
+}
+
+var cfg config
+
+func init() {
+	if cfg.addr = os.Getenv("ADDRESS"); cfg.addr == "" {
+		cfg.addr = "127.0.0.1:8080"
+	}
+	cfg.pollInterval = 2 * time.Second
+	if s := os.Getenv("POOL_INTERVAL"); s != "" {
+		if v, err := strconv.Atoi(s); err == nil {
+			cfg.pollInterval = time.Duration(v) * time.Second
+		}
+	}
+	cfg.reportInterval = 10 * time.Second
+	if s := os.Getenv("REPORT_INTERVAL"); s != "" {
+		if v, err := strconv.Atoi(s); err == nil {
+			cfg.reportInterval = time.Duration(v) * time.Second
+		}
+	}
+
+	log.Printf("Client init %+v", cfg)
+}
 
 type metricsEngine struct {
 	storage   *common.Storage
@@ -48,7 +72,7 @@ func (m *metricsEngine) WaitShutdown() {
 func (m *metricsEngine) pollJob(ctx context.Context) {
 	// get metrics
 	m.pollMetrics()
-	ticker := time.NewTicker(pollInterval)
+	ticker := time.NewTicker(cfg.pollInterval)
 	// start reportJob goroutine
 	ctxReport, cancelReport := context.WithCancel(ctx)
 	m.wg.Add(1)
@@ -68,7 +92,7 @@ func (m *metricsEngine) pollJob(ctx context.Context) {
 
 // reportJob goroutine for send report
 func (m *metricsEngine) reportJob(ctx context.Context) {
-	ticker := time.NewTicker(reportInterval)
+	ticker := time.NewTicker(cfg.reportInterval)
 	for {
 		select {
 		case <-ticker.C:
@@ -121,7 +145,7 @@ func (m *metricsEngine) sendReport() {
 			}
 			b, _ := json.Marshal(m)
 			log.Println(string(b))
-			url := fmt.Sprintf("http://%s/update/", addr)
+			url := fmt.Sprintf("http://%s/update/", cfg.addr)
 			resp, err := c.R().SetHeader("Content-Type", "application/json").SetBody(b).Post(url)
 			if err != nil {
 				log.Println(resp, err)
