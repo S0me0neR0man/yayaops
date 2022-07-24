@@ -223,6 +223,28 @@ func TestHandlers(t *testing.T) {
 				contentType: "application/json",
 			},
 		},
+		{
+			name:        "#21 wrong JSON post ",
+			url:         "/update/",
+			method:      http.MethodPost,
+			contentType: "application/json",
+			body:        "{\"id\":\"TOG\",\"type\":\"counter\",\"value\":1000.1}",
+			want: want{
+				code:        http.StatusBadRequest,
+				contentType: "application/json",
+			},
+		},
+		{
+			name:        "#22 wrong JSON post ",
+			url:         "/update/",
+			method:      http.MethodPost,
+			contentType: "application/json",
+			body:        "{\"id\":\"TOG\",\"type\":\"gauge\",\"delta\":1000}",
+			want: want{
+				code:        http.StatusBadRequest,
+				contentType: "application/json",
+			},
+		},
 		// {"id":"GCSys","type":"counter","delta":3807944}
 	}
 	s := New()

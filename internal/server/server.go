@@ -111,6 +111,8 @@ func (s *Server) updateJSONHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	log.Println(err)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusBadRequest)
 }
 
 // valueJSONHandler POST value/
@@ -128,6 +130,8 @@ func (s *Server) valueJSONHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	log.Println(err)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusBadRequest)
 }
 
 func (s *Server) executeCommand(cmd *common.Command, w http.ResponseWriter) {

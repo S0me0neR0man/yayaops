@@ -89,18 +89,18 @@ func (m *metricsEngine) pollMetrics() {
 		v := reflect.ValueOf(ms).FieldByName(name)
 		switch v.Kind() {
 		case reflect.Int64:
-			m.storage.Set(name, v.Int())
+			_ = m.storage.Set(name, v.Int())
 		case reflect.Uint64, reflect.Uint32:
-			m.storage.Set(name, int64(v.Uint()))
+			_ = m.storage.Set(name, int64(v.Uint()))
 		case reflect.Float64:
-			m.storage.Set(name, v.Float())
+			_ = m.storage.Set(name, v.Float())
 		default:
 			log.Println("pollMetrics", v.Kind())
 		}
 	}
 	// custom
-	m.storage.Set("RandomValue", rand.Float64())
-	m.storage.Set("PollCount", m.pollCount)
+	_ = m.storage.Set("RandomValue", rand.Float64())
+	_ = m.storage.Set("PollCount", m.pollCount)
 	m.pollCount++
 }
 
@@ -120,6 +120,7 @@ func (m *metricsEngine) sendReport() {
 				log.Println(err)
 			}
 			b, _ := json.Marshal(m)
+			log.Println(string(b))
 			url := fmt.Sprintf("http://%s/update/", addr)
 			resp, err := c.R().SetHeader("Content-Type", "application/json").SetBody(b).Post(url)
 			if err != nil {
