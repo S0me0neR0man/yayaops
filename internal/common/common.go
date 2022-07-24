@@ -104,6 +104,7 @@ func (m *Metrics) SetAnyValue(value any) error {
 				m.Delta = new(int64)
 			}
 			*m.Delta = v.Int()
+			return nil
 		}
 	}
 	return errors.New("SetAnyValue: wrong  type")
