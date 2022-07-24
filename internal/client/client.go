@@ -109,10 +109,16 @@ func (m *metricsEngine) sendReport() {
 	for _, name := range m.storage.GetNames() {
 		if val, ok := m.storage.Get(name); ok {
 			m := common.Metrics{}
-			m.MType = typeOfMetric(val)
+			//m.MType = typeOfMetric(val)
+			if name == "PollCount" {
+				m.MType = common.MTypeCounter
+			} else {
+				m.MType = common.MTypeGauge
+			}
 			m.ID = name
-			m.SetAnyValue(val)
-
+			if err := m.SetAnyValue(val); err != nil {
+				log.Println(err)
+			}
 			b, _ := json.Marshal(m)
 			url := fmt.Sprintf("http://%s/update/", addr)
 			resp, err := c.R().SetHeader("Content-Type", "application/json").SetBody(b).Post(url)
