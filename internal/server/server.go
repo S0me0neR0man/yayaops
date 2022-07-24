@@ -155,7 +155,10 @@ func (s *Server) executeCommand(cmd *common.Command, w http.ResponseWriter) {
 			var b []byte
 			var err error
 			if cmd.JSONResp {
-				cmd.SetAnyValue(v)
+				if cmd.SetAnyValue(v) != nil {
+					w.WriteHeader(http.StatusNotFound)
+					return
+				}
 				b, err = json.Marshal(cmd)
 			} else {
 				b = []byte(fmt.Sprintf("%v", v))
